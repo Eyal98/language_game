@@ -16,14 +16,28 @@ const ROUND_DELAY_MS = 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-let wordsData = JSON.parse(fs.readFileSync(WORDS_PATH, 'utf8'));
+// Load word data defensively — a malformed file shouldn't leave a half-started server.
+let wordsData;
+try {
+  wordsData = JSON.parse(fs.readFileSync(WORDS_PATH, 'utf8'));
+} catch (err) {
+  console.error(`Failed to read/parse ${WORDS_PATH}: ${err.message}`);
+  process.exit(1);
+}
+if (!wordsData || !Array.isArray(wordsData.words)) {
+  console.error('words.json must contain a "words" array.');
+  process.exit(1);
+}
+
+// Round cap derives from the data (override with MAX_ROUNDS) so adding words just works.
+const MAX_ROUNDS = parseInt(process.env.MAX_ROUNDS, 10) || wordsData.words.length;
 
 let gameState = {
   status: 'waiting',
   currentWord: null,
   scores: { player1: 0, player2: 0 },
   roundNumber: 0,
-  totalRounds: 8,
+  totalRounds: 0,
   usedWords: [],
   shuffledWords: [],
   roundLocked: false,
@@ -31,10 +45,20 @@ let gameState = {
   lastScannedUid: null
 };
 
-let roundTimer = null;
+let roundTimer = null;     // the in-round countdown (ROUND_TIMEOUT_MS)
+let nextRoundTimer = null; // the inter-round delay before the next word (ROUND_DELAY_MS)
 
+// Atomic save: write to a temp file then rename, so a crash mid-write can't corrupt words.json.
 function saveWords() {
-  fs.writeFileSync(WORDS_PATH, JSON.stringify(wordsData, null, 2), 'utf8');
+  const tmp = `${WORDS_PATH}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(wordsData, null, 2), 'utf8');
+  fs.renameSync(tmp, WORDS_PATH);
+}
+
+// Schedule the next round, replacing any pending one so a stale timer can't fire into a new game.
+function scheduleNextRound() {
+  clearTimeout(nextRoundTimer);
+  nextRoundTimer = setTimeout(startNewRound, ROUND_DELAY_MS);
 }
 
 function broadcast(data) {
@@ -85,6 +109,7 @@ function startNewRound() {
       category: gameState.currentWord.category
     },
     showNikkud: gameState.showNikkud,
+    roundDurationMs: ROUND_TIMEOUT_MS,
     scores: gameState.scores
   });
 
@@ -98,17 +123,21 @@ function startNewRound() {
         word: gameState.currentWord,
         scores: gameState.scores
       });
-      setTimeout(startNewRound, ROUND_DELAY_MS);
+      scheduleNextRound();
     }
   }, ROUND_TIMEOUT_MS);
 }
 
 function startGame() {
   const registeredWords = wordsData.words.filter(w => w.cardUid !== null);
-  const count = Math.min(registeredWords.length, 8);
+  const count = Math.min(registeredWords.length, MAX_ROUNDS);
   if (count === 0) {
     return { error: 'No cards registered. Use /admin to register cards first.' };
   }
+
+  // Cancel any pending timers from a previous game so they can't corrupt this fresh one.
+  clearTimeout(roundTimer);
+  clearTimeout(nextRoundTimer);
 
   gameState.status = 'playing';
   gameState.scores = { player1: 0, player2: 0 };
@@ -165,14 +194,17 @@ app.post('/api/game/skip', (req, res) => {
     word: gameState.currentWord,
     scores: gameState.scores
   });
-  setTimeout(startNewRound, ROUND_DELAY_MS);
+  scheduleNextRound();
   res.json({ ok: true });
 });
 
 app.post('/api/scan', (req, res) => {
   const { reader, uid } = req.body;
-  if (!uid || !reader) {
-    return res.status(400).json({ error: 'Missing reader or uid' });
+  if (typeof uid !== 'string' || !uid.trim()) {
+    return res.status(400).json({ error: 'Missing or invalid uid' });
+  }
+  if (reader !== 1 && reader !== 2) {
+    return res.status(400).json({ error: 'reader must be 1 or 2' });
   }
 
   const normalizedUid = uid.trim().toUpperCase();
@@ -200,7 +232,7 @@ app.post('/api/scan', (req, res) => {
       scores: gameState.scores
     });
 
-    setTimeout(startNewRound, ROUND_DELAY_MS);
+    scheduleNextRound();
     return res.json({ status: 'correct', player });
   }
 
@@ -210,6 +242,9 @@ app.post('/api/scan', (req, res) => {
 
 app.post('/api/words/:id/card', (req, res) => {
   const { uid } = req.body;
+  if (typeof uid !== 'string' || !uid.trim()) {
+    return res.status(400).json({ error: 'Missing or invalid uid' });
+  }
   const word = wordsData.words.find(w => w.id === req.params.id);
   if (!word) return res.status(404).json({ error: 'Word not found' });
 
@@ -256,7 +291,10 @@ wss.on('connection', (ws) => {
     try { data = JSON.parse(raw); } catch { return; }
 
     if (data.event === 'startGame') {
-      startGame();
+      const result = startGame();
+      if (result.error) {
+        ws.send(JSON.stringify({ event: 'startError', message: result.error }));
+      }
     } else if (data.event === 'toggleNikkud') {
       gameState.showNikkud = data.show;
       broadcast({ event: 'nikkudChanged', show: data.show });
@@ -270,7 +308,7 @@ wss.on('connection', (ws) => {
           word: gameState.currentWord,
           scores: gameState.scores
         });
-        setTimeout(startNewRound, ROUND_DELAY_MS);
+        scheduleNextRound();
       }
     }
   });

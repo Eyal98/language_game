@@ -2,8 +2,6 @@
 
 A two-player Hebrew vocabulary race game using RFID cards. The screen shows a Hebrew word — players race to scan the matching picture card with their RFID reader. First correct scan gets the point!
 
-![Game Preview](https://via.placeholder.com/800x400?text=Hebrew+Word+Game)
-
 ---
 
 ## How It Works
@@ -217,3 +215,26 @@ taskkill /PID <PID> /F
 
 **Game won't start**
 - At least one card must be registered in the admin page before starting
+- If you click Start with no cards registered, the welcome screen now shows a "Register cards first" message
+
+---
+
+## Configuration
+
+A few behaviors can be tuned with environment variables when starting the server:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PORT` | `3000` | HTTP/WebSocket port |
+| `MAX_ROUNDS` | number of words in `words.json` | Caps how many rounds a game runs |
+
+```bash
+# Example: run on port 8080 with at most 5 rounds
+PORT=8080 MAX_ROUNDS=5 npm start
+```
+
+---
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).
