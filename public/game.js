@@ -6,12 +6,14 @@ const screens = {
 
 const els = {
   btnStart: document.getElementById('btn-start'),
+  startError: document.getElementById('start-error'),
   btnPlayAgain: document.getElementById('btn-play-again'),
   welcomeError: document.getElementById('welcome-error'),
   nikkudWelcome: document.getElementById('nikkud-toggle-welcome'),
   nikkudGame: document.getElementById('nikkud-toggle-game'),
   roundNumber: document.getElementById('round-number'),
   totalRounds: document.getElementById('total-rounds'),
+  turnBanner: document.getElementById('turn-banner'),
   wordDisplay: document.getElementById('word-display'),
   wordFeedback: document.getElementById('word-feedback'),
   wordReveal: document.getElementById('word-reveal'),
@@ -195,6 +197,20 @@ function highlightWinner(player) {
   setTimeout(() => el.classList.remove('player-winner'), 3000);
 }
 
+function setActivePlayer(player) {
+  els.scorePlayer1.classList.toggle('active-turn', player === 'player1');
+  els.scorePlayer2.classList.toggle('active-turn', player === 'player2');
+  els.turnBanner.textContent = player === 'player1' ? "Player 1's Turn" : "Player 2's Turn";
+  els.turnBanner.className = 'turn-banner ' + (player === 'player1' ? 'player1-bg' : 'player2-bg');
+}
+
+function clearActivePlayer() {
+  els.scorePlayer1.classList.remove('active-turn');
+  els.scorePlayer2.classList.remove('active-turn');
+  els.turnBanner.textContent = '';
+  els.turnBanner.className = 'turn-banner';
+}
+
 // ===== WebSocket =====
 
 function connectWebSocket() {
@@ -232,13 +248,19 @@ function handleEvent(data) {
         updateScores(data.scores);
         els.roundNumber.textContent = data.roundNumber;
         els.totalRounds.textContent = data.totalRounds;
+        if (data.currentPlayer) setActivePlayer(data.currentPlayer);
       }
       break;
 
     case 'gameStarted':
+      if (els.startError) els.startError.textContent = '';
       showScreen('playing');
       els.totalRounds.textContent = data.totalRounds;
       hideReveal();
+      break;
+
+    case 'startError':
+      if (els.startError) els.startError.textContent = data.message;
       break;
 
     case 'newRound':
@@ -274,11 +296,13 @@ function handleEvent(data) {
       break;
     }
 
-    case 'roundTimeout':
+    case 'roundTimeout': {
       stopTimer();
-      showFeedback('Time\'s up! ⏰', '#E67E22');
+      const who = data.currentPlayer === 'player2' ? 'Player 2' : 'Player 1';
+      showFeedback(`${who} - Time's up! ⏰`, '#E67E22');
       if (data.word) revealWord(data.word);
       break;
+    }
 
     case 'roundSkipped':
       stopTimer();
@@ -288,6 +312,7 @@ function handleEvent(data) {
 
     case 'gameOver': {
       playGameOver();
+      clearActivePlayer();
       setTimeout(() => {
         showScreen('gameover');
         els.finalScore1.textContent = data.scores.player1;

@@ -1,18 +1,19 @@
 /*
- * Hebrew RFID Game - Dual Reader (both players on one Arduino)
+ * Hebrew RFID Game - Single Reader (turn-based, both players share one reader)
+ *
+ * Players take turns on a single RFID reader. The server tracks whose turn it
+ * is, so this sketch just reports each scan; it does not identify the player.
  *
  * Hardware:
  *   - Arduino Uno/Leonardo
- *   - 2x MFRC522 RFID readers, sharing SPI bus
+ *   - 1x MFRC522 RFID reader
  *   - ESP8266 WiFi module via SoftwareSerial
  *
  * Wiring:
- *   Both readers share: SCK=13, MOSI=11, MISO=12
- *   Reader 1 (Player 1): SDA=10, RST=9
- *   Reader 2 (Player 2): SDA=4,  RST=8
- *   WiFi ESP8266:        RX=2,   TX=3
- *   LED Green P1=6, LED Red P1=7
- *   LED Green P2=5, LED Red P2=A0
+ *   Reader shares SPI: SCK=13, MOSI=11, MISO=12
+ *   Reader:            SDA=10, RST=9
+ *   WiFi ESP8266:      RX=2,   TX=3
+ *   LED Green=6, LED Red=7
  */
 
 #include <SPI.h>
@@ -27,15 +28,11 @@
 #define WIFI_PASS   "YourNetworkPassword"
 
 // ===== PINS =====
-#define SS1_PIN     10    // Reader 1 SS (Player 1)
-#define RST1_PIN    9     // Reader 1 RST
-#define SS2_PIN     4     // Reader 2 SS (Player 2)
-#define RST2_PIN    8     // Reader 2 RST
+#define SS_PIN      10    // Reader SS
+#define RST_PIN     9     // Reader RST
 
-#define LED_GREEN_P1  6
-#define LED_RED_P1    7
-#define LED_GREEN_P2  5
-#define LED_RED_P2    A0
+#define LED_GREEN   6
+#define LED_RED     7
 
 #define WIFI_RX     2     // ESP8266 TX -> Arduino pin 2
 #define WIFI_TX     3     // ESP8266 RX -> Arduino pin 3
@@ -62,10 +59,8 @@ void setup() {
   Serial.begin(115200);
   espSerial.begin(9600);
 
-  pinMode(LED_GREEN_P1, OUTPUT);
-  pinMode(LED_RED_P1,   OUTPUT);
-  pinMode(LED_GREEN_P2, OUTPUT);
-  pinMode(LED_RED_P2,   OUTPUT);
+  pinMode(LED_GREEN, OUTPUT);
+  pinMode(LED_RED,   OUTPUT);
 
   WiFi.init(&espSerial);
 
@@ -76,9 +71,8 @@ void setup() {
   }
 
   SPI.begin();
-  reader1.PCD_Init();
-  reader2.PCD_Init();
-  Serial.println("Both RFID readers ready.");
+  reader.PCD_Init();
+  Serial.println("RFID reader ready.");
 }
 
 void loop() {
@@ -127,9 +121,7 @@ void checkReader(MFRC522 &reader, int readerId,
   lastUid = uid;
   lastScanTime = now;
 
-  Serial.print("Player ");
-  Serial.print(readerId);
-  Serial.print(" scanned: ");
+  Serial.print("Scanned: ");
   Serial.println(uid);
 
   String body = sendScan(readerId, uid);
@@ -144,6 +136,22 @@ void checkReader(MFRC522 &reader, int readerId,
 
   reader.PICC_HaltA();
   reader.PCD_StopCrypto1();
+}
+
+// Extract the value of the JSON "status" field from the HTTP response body
+// (the part after the blank line that separates headers from body). This is
+// robust to header contents and to other fields being present.
+String parseStatus(String response) {
+  int bodyStart = response.indexOf("\r\n\r\n");
+  String body = bodyStart >= 0 ? response.substring(bodyStart + 4) : response;
+
+  int key = body.indexOf("\"status\"");
+  if (key < 0) return "";
+  int firstQuote = body.indexOf("\"", body.indexOf(":", key));
+  if (firstQuote < 0) return "";
+  int secondQuote = body.indexOf("\"", firstQuote + 1);
+  if (secondQuote < 0) return "";
+  return body.substring(firstQuote + 1, secondQuote);
 }
 
 String getUidString(MFRC522 &reader) {
@@ -211,17 +219,6 @@ void blinkLed(int pin, int times) {
     digitalWrite(pin, HIGH);
     delay(150);
     digitalWrite(pin, LOW);
-    delay(150);
-  }
-}
-
-void blinkBoth(int pin1, int pin2, int times) {
-  for (int i = 0; i < times; i++) {
-    digitalWrite(pin1, HIGH);
-    digitalWrite(pin2, HIGH);
-    delay(150);
-    digitalWrite(pin1, LOW);
-    digitalWrite(pin2, LOW);
     delay(150);
   }
 }

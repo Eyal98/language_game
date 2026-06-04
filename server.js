@@ -12,6 +12,9 @@ const PORT = process.env.PORT || 3000;
 const WORDS_PATH = path.join(__dirname, 'data', 'words.json');
 const ROUND_TIMEOUT_MS = 30000;
 const ROUND_DELAY_MS = 3000;
+// Cap on how many rounds a single game can run. Derived from the data when
+// possible, falling back to this value.
+const DEFAULT_MAX_ROUNDS = 8;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -35,6 +38,7 @@ const MAX_ROUNDS = parseInt(process.env.MAX_ROUNDS, 10) || wordsData.words.lengt
 let gameState = {
   status: 'waiting',
   currentWord: null,
+  currentPlayer: 'player1',
   scores: { player1: 0, player2: 0 },
   roundNumber: 0,
   totalRounds: 0,
@@ -97,11 +101,15 @@ function startNewRound() {
   gameState.roundNumber++;
   gameState.roundLocked = false;
   gameState.status = 'playing';
+  // Single shared reader: players alternate turns. Player 1 takes odd rounds,
+  // player 2 takes even rounds. totalRounds is forced even so turns are equal.
+  gameState.currentPlayer = gameState.roundNumber % 2 === 1 ? 'player1' : 'player2';
 
   broadcast({
     event: 'newRound',
     roundNumber: gameState.roundNumber,
     totalRounds: gameState.totalRounds,
+    currentPlayer: gameState.currentPlayer,
     word: {
       id: gameState.currentWord.id,
       hebrew: gameState.currentWord.hebrew,
@@ -121,6 +129,7 @@ function startNewRound() {
       broadcast({
         event: 'roundTimeout',
         word: gameState.currentWord,
+        currentPlayer: gameState.currentPlayer,
         scores: gameState.scores
       });
       scheduleNextRound();
@@ -142,7 +151,8 @@ function startGame() {
   gameState.status = 'playing';
   gameState.scores = { player1: 0, player2: 0 };
   gameState.roundNumber = 0;
-  gameState.totalRounds = count;
+  gameState.totalRounds = evenCount;
+  gameState.currentPlayer = 'player1';
   gameState.usedWords = [];
   gameState.shuffledWords = shuffleArray(registeredWords);
   gameState.roundLocked = false;
@@ -172,6 +182,7 @@ app.get('/api/status', (req, res) => {
     scores: gameState.scores,
     roundNumber: gameState.roundNumber,
     totalRounds: gameState.totalRounds,
+    currentPlayer: gameState.currentPlayer,
     lastScannedUid: gameState.lastScannedUid
   });
 });
@@ -192,6 +203,7 @@ app.post('/api/game/skip', (req, res) => {
   broadcast({
     event: 'roundSkipped',
     word: gameState.currentWord,
+    currentPlayer: gameState.currentPlayer,
     scores: gameState.scores
   });
   scheduleNextRound();
@@ -210,7 +222,9 @@ app.post('/api/scan', (req, res) => {
   const normalizedUid = uid.trim().toUpperCase();
   gameState.lastScannedUid = normalizedUid;
 
-  const player = reader === 1 ? 'player1' : 'player2';
+  // Single shared reader: the scan belongs to whoever's turn it is. The
+  // Arduino's `reader` field is accepted but ignored for player identity.
+  const player = gameState.currentPlayer;
 
   if (gameState.status !== 'playing' || gameState.roundLocked) {
     broadcast({ event: 'cardScanned', uid: normalizedUid, player });
@@ -277,6 +291,7 @@ wss.on('connection', (ws) => {
     scores: gameState.scores,
     roundNumber: gameState.roundNumber,
     totalRounds: gameState.totalRounds,
+    currentPlayer: gameState.currentPlayer,
     showNikkud: gameState.showNikkud,
     currentWord: gameState.status === 'playing' ? {
       id: gameState.currentWord.id,
@@ -306,6 +321,7 @@ wss.on('connection', (ws) => {
         broadcast({
           event: 'roundSkipped',
           word: gameState.currentWord,
+          currentPlayer: gameState.currentPlayer,
           scores: gameState.scores
         });
         scheduleNextRound();

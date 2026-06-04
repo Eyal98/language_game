@@ -1,16 +1,17 @@
 # Hebrew Word Game 🎮
 
-A two-player Hebrew vocabulary race game using RFID cards. The screen shows a Hebrew word — players race to scan the matching picture card with their RFID reader. First correct scan gets the point!
+A two-player, turn-based Hebrew vocabulary game using RFID cards. Players share **one** RFID reader and take turns: the screen shows a Hebrew word and highlights whose turn it is — that player scans the matching picture card to score. Most points after all rounds wins!
 
 ---
 
 ## How It Works
 
 1. Each physical card has a picture on it (dog, cat, apple, etc.)
-2. The screen shows a Hebrew word
-3. Both players search through their cards for the matching picture
-4. First player to scan the correct card wins the round
-5. Most points after all rounds wins!
+2. The screen shows a Hebrew word and whose turn it is
+3. The active player searches their cards for the matching picture
+4. They scan the correct card on the shared reader to score the round
+5. Turns alternate between the two players each round
+6. Most points after all rounds wins!
 
 ---
 
@@ -21,10 +22,10 @@ A two-player Hebrew vocabulary race game using RFID cards. The screen shows a He
 
 ### Hardware (optional — game works without it for testing)
 - Arduino Uno or Leonardo
-- 2× MFRC522 RFID reader module
+- 1× MFRC522 RFID reader module (shared by both players)
 - ESP8266 WiFi module
 - 4–8 RFID cards or key fobs (13.56 MHz / MIFARE)
-- Some LEDs + 220Ω resistors (optional, for feedback)
+- 2 LEDs (green + red) + 220Ω resistors (optional, for scan feedback)
 
 ---
 
@@ -83,7 +84,8 @@ curl -X POST http://localhost:3000/api/words/cat/card \
 curl -X POST http://localhost:3000/api/game/start
 ```
 
-**3. Simulate a scan (reader 1 = Player 1, reader 2 = Player 2):**
+**3. Simulate a scan.** With a single shared reader, the server attributes the
+scan to whoever's turn it is — the `reader` field is accepted but ignored:
 ```bash
 curl -X POST http://localhost:3000/api/scan \
   -H "Content-Type: application/json" \
@@ -99,28 +101,24 @@ curl -X POST http://localhost:3000/api/game/skip
 
 ## Arduino Setup
 
-### Wiring (both readers on one Arduino)
+### Wiring (single shared reader)
 
 ```
 Arduino Uno
 ───────────────────────────────────────────────
-Pin 13 ──┬── SCK  (Reader 1 & 2, shared)
-Pin 12 ──┬── MISO (Reader 1 & 2, shared)
-Pin 11 ──┬── MOSI (Reader 1 & 2, shared)
-Pin 10 ───── SDA  (Reader 1 / Player 1 only)
-Pin  9 ───── RST  (Reader 1 / Player 1 only)
-Pin  4 ───── SDA  (Reader 2 / Player 2 only)
-Pin  8 ───── RST  (Reader 2 / Player 2 only)
-3.3V   ──┬── VCC  (Reader 1 & 2) ⚠️ NOT 5V!
-GND    ──┬── GND  (Reader 1 & 2)
+Pin 13 ───── SCK  (Reader)
+Pin 12 ───── MISO (Reader)
+Pin 11 ───── MOSI (Reader)
+Pin 10 ───── SDA  (Reader)
+Pin  9 ───── RST  (Reader)
+3.3V   ───── VCC  (Reader) ⚠️ NOT 5V!
+GND    ───── GND  (Reader)
 
 Pin  2 ───── ESP8266 TX (WiFi module)
 Pin  3 ───── ESP8266 RX (WiFi module, use voltage divider)
 
-Pin  6 ───── Green LED Player 1 + 220Ω to GND
-Pin  7 ───── Red LED   Player 1 + 220Ω to GND
-Pin  5 ───── Green LED Player 2 + 220Ω to GND
-Pin A0 ───── Red LED   Player 2 + 220Ω to GND
+Pin  6 ───── Green LED (correct scan) + 220Ω to GND
+Pin  7 ───── Red LED   (wrong scan)   + 220Ω to GND
 ```
 
 ### Arduino Libraries
