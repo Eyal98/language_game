@@ -8,6 +8,7 @@ const els = {
   btnStart: document.getElementById('btn-start'),
   startError: document.getElementById('start-error'),
   btnPlayAgain: document.getElementById('btn-play-again'),
+  welcomeError: document.getElementById('welcome-error'),
   nikkudWelcome: document.getElementById('nikkud-toggle-welcome'),
   nikkudGame: document.getElementById('nikkud-toggle-game'),
   roundNumber: document.getElementById('round-number'),
@@ -270,7 +271,6 @@ function handleEvent(data) {
       els.totalRounds.textContent = data.totalRounds;
       updateWord(data.word);
       updateScores(data.scores);
-      if (data.currentPlayer) setActivePlayer(data.currentPlayer);
       startTimer(data.roundDurationMs || 30000);
       playChime();
       break;
@@ -338,7 +338,21 @@ function handleEvent(data) {
 
     case 'cardScanned':
       break;
+
+    case 'startError':
+      showStartError(data.message);
+      break;
   }
+}
+
+function showStartError(message) {
+  if (!els.welcomeError) return;
+  els.welcomeError.textContent = message;
+  els.welcomeError.classList.add('visible');
+  clearTimeout(showStartError._t);
+  showStartError._t = setTimeout(() => {
+    els.welcomeError.classList.remove('visible');
+  }, 5000);
 }
 
 // ===== Event Listeners =====
@@ -346,7 +360,7 @@ function handleEvent(data) {
 els.btnStart.addEventListener('click', () => {
   if (audioCtx) audioCtx.resume();
   getAudioCtx();
-  if (els.startError) els.startError.textContent = '';
+  if (els.welcomeError) els.welcomeError.classList.remove('visible');
   sendEvent('startGame');
 });
 

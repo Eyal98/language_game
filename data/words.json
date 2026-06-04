@@ -8,7 +8,7 @@
       "english": "Dog",
       "emoji": "🐶",
       "category": "animal",
-      "cardUid": "AA BB CC 01"
+      "cardUid": null
     },
     {
       "id": "cat",
@@ -18,7 +18,7 @@
       "english": "Cat",
       "emoji": "🐱",
       "category": "animal",
-      "cardUid": "AA BB CC 01"
+      "cardUid": null
     },
     {
       "id": "fish",
@@ -28,7 +28,7 @@
       "english": "Fish",
       "emoji": "🐟",
       "category": "animal",
-      "cardUid": "AA BB CC 02"
+      "cardUid": null
     },
     {
       "id": "red",
@@ -38,7 +38,7 @@
       "english": "Red",
       "emoji": "🔴",
       "category": "color",
-      "cardUid": "AA BB CC 02"
+      "cardUid": null
     },
     {
       "id": "blue",

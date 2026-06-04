@@ -19,18 +19,21 @@ const DEFAULT_MAX_ROUNDS = 8;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Load word data defensively — a malformed file shouldn't leave a half-started server.
 let wordsData;
 try {
   wordsData = JSON.parse(fs.readFileSync(WORDS_PATH, 'utf8'));
-  if (!wordsData || !Array.isArray(wordsData.words)) {
-    throw new Error('words.json must contain a "words" array');
-  }
 } catch (err) {
-  console.error(`Failed to load word data from ${WORDS_PATH}: ${err.message}`);
+  console.error(`Failed to read/parse ${WORDS_PATH}: ${err.message}`);
+  process.exit(1);
+}
+if (!wordsData || !Array.isArray(wordsData.words)) {
+  console.error('words.json must contain a "words" array.');
   process.exit(1);
 }
 
-const maxRounds = Math.max(wordsData.words.length, DEFAULT_MAX_ROUNDS);
+// Round cap derives from the data (override with MAX_ROUNDS) so adding words just works.
+const MAX_ROUNDS = parseInt(process.env.MAX_ROUNDS, 10) || wordsData.words.length;
 
 let gameState = {
   status: 'waiting',
@@ -38,7 +41,7 @@ let gameState = {
   currentPlayer: 'player1',
   scores: { player1: 0, player2: 0 },
   roundNumber: 0,
-  totalRounds: maxRounds,
+  totalRounds: 0,
   usedWords: [],
   shuffledWords: [],
   roundLocked: false,
@@ -46,27 +49,20 @@ let gameState = {
   lastScannedUid: null
 };
 
-let roundTimer = null;
-// Timer for the delay between rounds. Tracked so it can be cleared on
-// restart, otherwise an orphaned timer could advance a freshly started game.
-let nextRoundTimer = null;
+let roundTimer = null;     // the in-round countdown (ROUND_TIMEOUT_MS)
+let nextRoundTimer = null; // the inter-round delay before the next word (ROUND_DELAY_MS)
 
+// Atomic save: write to a temp file then rename, so a crash mid-write can't corrupt words.json.
+function saveWords() {
+  const tmp = `${WORDS_PATH}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(wordsData, null, 2), 'utf8');
+  fs.renameSync(tmp, WORDS_PATH);
+}
+
+// Schedule the next round, replacing any pending one so a stale timer can't fire into a new game.
 function scheduleNextRound() {
   clearTimeout(nextRoundTimer);
   nextRoundTimer = setTimeout(startNewRound, ROUND_DELAY_MS);
-}
-
-function clearTimers() {
-  clearTimeout(roundTimer);
-  clearTimeout(nextRoundTimer);
-}
-
-// Atomic save: write to a temp file then rename, so a crash mid-write can't
-// corrupt the existing word data.
-function saveWords() {
-  const tmpPath = `${WORDS_PATH}.tmp`;
-  fs.writeFileSync(tmpPath, JSON.stringify(wordsData, null, 2), 'utf8');
-  fs.renameSync(tmpPath, WORDS_PATH);
 }
 
 function broadcast(data) {
@@ -121,8 +117,8 @@ function startNewRound() {
       category: gameState.currentWord.category
     },
     showNikkud: gameState.showNikkud,
-    scores: gameState.scores,
-    roundDurationMs: ROUND_TIMEOUT_MS
+    roundDurationMs: ROUND_TIMEOUT_MS,
+    scores: gameState.scores
   });
 
   clearTimeout(roundTimer);
@@ -143,17 +139,14 @@ function startNewRound() {
 
 function startGame() {
   const registeredWords = wordsData.words.filter(w => w.cardUid !== null);
-  const count = Math.min(registeredWords.length, maxRounds);
-  // Force an even number of rounds so each player gets the same number of
-  // turns on the shared reader. Leftover odd card isn't played this game.
-  const evenCount = count - (count % 2);
-  if (evenCount < 2) {
-    return { error: 'Register at least 2 cards in /admin to start a two-player game.' };
+  const count = Math.min(registeredWords.length, MAX_ROUNDS);
+  if (count === 0) {
+    return { error: 'No cards registered. Use /admin to register cards first.' };
   }
 
-  // Cancel any pending timers from a previous game so they can't fire into
-  // this fresh state.
-  clearTimers();
+  // Cancel any pending timers from a previous game so they can't corrupt this fresh one.
+  clearTimeout(roundTimer);
+  clearTimeout(nextRoundTimer);
 
   gameState.status = 'playing';
   gameState.scores = { player1: 0, player2: 0 };
@@ -218,9 +211,12 @@ app.post('/api/game/skip', (req, res) => {
 });
 
 app.post('/api/scan', (req, res) => {
-  const { uid } = req.body;
+  const { reader, uid } = req.body;
   if (typeof uid !== 'string' || !uid.trim()) {
     return res.status(400).json({ error: 'Missing or invalid uid' });
+  }
+  if (reader !== 1 && reader !== 2) {
+    return res.status(400).json({ error: 'reader must be 1 or 2' });
   }
 
   const normalizedUid = uid.trim().toUpperCase();
@@ -311,7 +307,7 @@ wss.on('connection', (ws) => {
 
     if (data.event === 'startGame') {
       const result = startGame();
-      if (result.error && ws.readyState === WebSocket.OPEN) {
+      if (result.error) {
         ws.send(JSON.stringify({ event: 'startError', message: result.error }));
       }
     } else if (data.event === 'toggleNikkud') {

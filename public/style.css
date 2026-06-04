@@ -125,22 +125,19 @@ body {
   transform: scale(0.98);
 }
 
-.start-error {
-  min-height: 1.5em;
-  margin-top: 1rem;
-  color: #fff;
-  background: rgba(231, 76, 60, 0.9);
-  border-radius: 8px;
-  padding: 0 0.9rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.welcome-error {
+  margin-top: 1.5rem;
+  min-height: 1.5rem;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--wrong);
+  opacity: 0;
+  transition: opacity 0.3s;
 }
 
-.start-error:empty {
-  background: none;
-  padding: 0;
+.welcome-error.visible {
+  opacity: 1;
+  animation: shake 0.5s ease;
 }
 
 .nikkud-toggle-container {

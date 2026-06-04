@@ -2,8 +2,6 @@
 
 A two-player, turn-based Hebrew vocabulary game using RFID cards. Players share **one** RFID reader and take turns: the screen shows a Hebrew word and highlights whose turn it is — that player scans the matching picture card to score. Most points after all rounds wins!
 
-> **Looking for the head-to-head racing version with two readers?** It's preserved at the `two-scanners-v1` tag.
-
 ---
 
 ## How It Works
@@ -215,10 +213,26 @@ taskkill /PID <PID> /F
 
 **Game won't start**
 - At least one card must be registered in the admin page before starting
-- If you click **Start Game** with no cards registered, the welcome screen now shows an error message explaining why
+- If you click Start with no cards registered, the welcome screen now shows a "Register cards first" message
+
+---
+
+## Configuration
+
+A few behaviors can be tuned with environment variables when starting the server:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PORT` | `3000` | HTTP/WebSocket port |
+| `MAX_ROUNDS` | number of words in `words.json` | Caps how many rounds a game runs |
+
+```bash
+# Example: run on port 8080 with at most 5 rounds
+PORT=8080 MAX_ROUNDS=5 npm start
+```
 
 ---
 
 ## License
 
-Released under the [MIT License](LICENSE).
+Licensed under the [Apache License 2.0](LICENSE).
