@@ -6,6 +6,7 @@ const screens = {
 
 const els = {
   btnStart: document.getElementById('btn-start'),
+  startError: document.getElementById('start-error'),
   btnPlayAgain: document.getElementById('btn-play-again'),
   nikkudWelcome: document.getElementById('nikkud-toggle-welcome'),
   nikkudGame: document.getElementById('nikkud-toggle-game'),
@@ -235,9 +236,14 @@ function handleEvent(data) {
       break;
 
     case 'gameStarted':
+      if (els.startError) els.startError.textContent = '';
       showScreen('playing');
       els.totalRounds.textContent = data.totalRounds;
       hideReveal();
+      break;
+
+    case 'startError':
+      if (els.startError) els.startError.textContent = data.message;
       break;
 
     case 'newRound':
@@ -248,7 +254,7 @@ function handleEvent(data) {
       els.totalRounds.textContent = data.totalRounds;
       updateWord(data.word);
       updateScores(data.scores);
-      startTimer(30000);
+      startTimer(data.roundDurationMs || 30000);
       playChime();
       break;
 
@@ -320,6 +326,7 @@ function handleEvent(data) {
 els.btnStart.addEventListener('click', () => {
   if (audioCtx) audioCtx.resume();
   getAudioCtx();
+  if (els.startError) els.startError.textContent = '';
   sendEvent('startGame');
 });
 

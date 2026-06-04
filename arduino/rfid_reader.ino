@@ -84,8 +84,27 @@ void setup() {
 }
 
 void loop() {
+  ensureWifi();
   checkReader(reader1, 1, lastUid1, lastScanTime1, LED_GREEN_P1, LED_RED_P1);
   checkReader(reader2, 2, lastUid2, lastScanTime2, LED_GREEN_P2, LED_RED_P2);
+}
+
+// Reconnect to WiFi if the link drops, so a brief outage doesn't take the
+// game offline until the Arduino is power-cycled.
+void ensureWifi() {
+  if (WiFi.status() == WL_CONNECTED) {
+    return;
+  }
+  Serial.print("WiFi lost, reconnecting...");
+  int status = WiFi.begin(WIFI_SSID, WIFI_PASS);
+  if (status == WL_CONNECTED) {
+    Serial.println(" reconnected!");
+    blinkBoth(LED_GREEN_P1, LED_GREEN_P2, 2);
+  } else {
+    Serial.println(" failed, will retry.");
+    blinkBoth(LED_RED_P1, LED_RED_P2, 2);
+    delay(1000);
+  }
 }
 
 void checkReader(MFRC522 &reader, int readerId,
@@ -113,17 +132,34 @@ void checkReader(MFRC522 &reader, int readerId,
   Serial.println(uid);
 
   String response = sendScan(readerId, uid);
+  String status = parseStatus(response);
 
-  if (response.indexOf("\"correct\"") >= 0) {
+  if (status == "correct") {
     Serial.println("CORRECT!");
     blinkLed(ledGreen, 2);
-  } else if (response.indexOf("\"wrong\"") >= 0) {
+  } else if (status == "wrong") {
     Serial.println("Wrong answer");
     blinkLed(ledRed, 1);
   }
 
   reader.PICC_HaltA();
   reader.PCD_StopCrypto1();
+}
+
+// Extract the value of the JSON "status" field from the HTTP response body
+// (the part after the blank line that separates headers from body). This is
+// robust to header contents and to other fields being present.
+String parseStatus(String response) {
+  int bodyStart = response.indexOf("\r\n\r\n");
+  String body = bodyStart >= 0 ? response.substring(bodyStart + 4) : response;
+
+  int key = body.indexOf("\"status\"");
+  if (key < 0) return "";
+  int firstQuote = body.indexOf("\"", body.indexOf(":", key));
+  if (firstQuote < 0) return "";
+  int secondQuote = body.indexOf("\"", firstQuote + 1);
+  if (secondQuote < 0) return "";
+  return body.substring(firstQuote + 1, secondQuote);
 }
 
 String getUidString(MFRC522 &reader) {

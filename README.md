@@ -2,8 +2,6 @@
 
 A two-player Hebrew vocabulary race game using RFID cards. The screen shows a Hebrew word — players race to scan the matching picture card with their RFID reader. First correct scan gets the point!
 
-![Game Preview](https://via.placeholder.com/800x400?text=Hebrew+Word+Game)
-
 ---
 
 ## How It Works
@@ -217,3 +215,10 @@ taskkill /PID <PID> /F
 
 **Game won't start**
 - At least one card must be registered in the admin page before starting
+- If you click **Start Game** with no cards registered, the welcome screen now shows an error message explaining why
+
+---
+
+## License
+
+Released under the [MIT License](LICENSE).

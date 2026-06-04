@@ -12,18 +12,32 @@ const PORT = process.env.PORT || 3000;
 const WORDS_PATH = path.join(__dirname, 'data', 'words.json');
 const ROUND_TIMEOUT_MS = 30000;
 const ROUND_DELAY_MS = 3000;
+// Cap on how many rounds a single game can run. Derived from the data when
+// possible, falling back to this value.
+const DEFAULT_MAX_ROUNDS = 8;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-let wordsData = JSON.parse(fs.readFileSync(WORDS_PATH, 'utf8'));
+let wordsData;
+try {
+  wordsData = JSON.parse(fs.readFileSync(WORDS_PATH, 'utf8'));
+  if (!wordsData || !Array.isArray(wordsData.words)) {
+    throw new Error('words.json must contain a "words" array');
+  }
+} catch (err) {
+  console.error(`Failed to load word data from ${WORDS_PATH}: ${err.message}`);
+  process.exit(1);
+}
+
+const maxRounds = Math.max(wordsData.words.length, DEFAULT_MAX_ROUNDS);
 
 let gameState = {
   status: 'waiting',
   currentWord: null,
   scores: { player1: 0, player2: 0 },
   roundNumber: 0,
-  totalRounds: 8,
+  totalRounds: maxRounds,
   usedWords: [],
   shuffledWords: [],
   roundLocked: false,
@@ -32,9 +46,26 @@ let gameState = {
 };
 
 let roundTimer = null;
+// Timer for the delay between rounds. Tracked so it can be cleared on
+// restart, otherwise an orphaned timer could advance a freshly started game.
+let nextRoundTimer = null;
 
+function scheduleNextRound() {
+  clearTimeout(nextRoundTimer);
+  nextRoundTimer = setTimeout(startNewRound, ROUND_DELAY_MS);
+}
+
+function clearTimers() {
+  clearTimeout(roundTimer);
+  clearTimeout(nextRoundTimer);
+}
+
+// Atomic save: write to a temp file then rename, so a crash mid-write can't
+// corrupt the existing word data.
 function saveWords() {
-  fs.writeFileSync(WORDS_PATH, JSON.stringify(wordsData, null, 2), 'utf8');
+  const tmpPath = `${WORDS_PATH}.tmp`;
+  fs.writeFileSync(tmpPath, JSON.stringify(wordsData, null, 2), 'utf8');
+  fs.renameSync(tmpPath, WORDS_PATH);
 }
 
 function broadcast(data) {
@@ -85,7 +116,8 @@ function startNewRound() {
       category: gameState.currentWord.category
     },
     showNikkud: gameState.showNikkud,
-    scores: gameState.scores
+    scores: gameState.scores,
+    roundDurationMs: ROUND_TIMEOUT_MS
   });
 
   clearTimeout(roundTimer);
@@ -98,17 +130,21 @@ function startNewRound() {
         word: gameState.currentWord,
         scores: gameState.scores
       });
-      setTimeout(startNewRound, ROUND_DELAY_MS);
+      scheduleNextRound();
     }
   }, ROUND_TIMEOUT_MS);
 }
 
 function startGame() {
   const registeredWords = wordsData.words.filter(w => w.cardUid !== null);
-  const count = Math.min(registeredWords.length, 8);
+  const count = Math.min(registeredWords.length, maxRounds);
   if (count === 0) {
     return { error: 'No cards registered. Use /admin to register cards first.' };
   }
+
+  // Cancel any pending timers from a previous game so they can't fire into
+  // this fresh state.
+  clearTimers();
 
   gameState.status = 'playing';
   gameState.scores = { player1: 0, player2: 0 };
@@ -165,14 +201,14 @@ app.post('/api/game/skip', (req, res) => {
     word: gameState.currentWord,
     scores: gameState.scores
   });
-  setTimeout(startNewRound, ROUND_DELAY_MS);
+  scheduleNextRound();
   res.json({ ok: true });
 });
 
 app.post('/api/scan', (req, res) => {
   const { reader, uid } = req.body;
-  if (!uid || !reader) {
-    return res.status(400).json({ error: 'Missing reader or uid' });
+  if (typeof uid !== 'string' || !uid.trim() || (reader !== 1 && reader !== 2)) {
+    return res.status(400).json({ error: 'Missing or invalid reader (must be 1 or 2) or uid' });
   }
 
   const normalizedUid = uid.trim().toUpperCase();
@@ -200,7 +236,7 @@ app.post('/api/scan', (req, res) => {
       scores: gameState.scores
     });
 
-    setTimeout(startNewRound, ROUND_DELAY_MS);
+    scheduleNextRound();
     return res.json({ status: 'correct', player });
   }
 
@@ -210,6 +246,9 @@ app.post('/api/scan', (req, res) => {
 
 app.post('/api/words/:id/card', (req, res) => {
   const { uid } = req.body;
+  if (typeof uid !== 'string' || !uid.trim()) {
+    return res.status(400).json({ error: 'Missing or invalid uid' });
+  }
   const word = wordsData.words.find(w => w.id === req.params.id);
   if (!word) return res.status(404).json({ error: 'Word not found' });
 
@@ -256,7 +295,10 @@ wss.on('connection', (ws) => {
     try { data = JSON.parse(raw); } catch { return; }
 
     if (data.event === 'startGame') {
-      startGame();
+      const result = startGame();
+      if (result.error && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ event: 'startError', message: result.error }));
+      }
     } else if (data.event === 'toggleNikkud') {
       gameState.showNikkud = data.show;
       broadcast({ event: 'nikkudChanged', show: data.show });
@@ -270,7 +312,7 @@ wss.on('connection', (ws) => {
           word: gameState.currentWord,
           scores: gameState.scores
         });
-        setTimeout(startNewRound, ROUND_DELAY_MS);
+        scheduleNextRound();
       }
     }
   });

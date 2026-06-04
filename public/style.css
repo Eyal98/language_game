@@ -125,6 +125,24 @@ body {
   transform: scale(0.98);
 }
 
+.start-error {
+  min-height: 1.5em;
+  margin-top: 1rem;
+  color: #fff;
+  background: rgba(231, 76, 60, 0.9);
+  border-radius: 8px;
+  padding: 0 0.9rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.start-error:empty {
+  background: none;
+  padding: 0;
+}
+
 .nikkud-toggle-container {
   display: flex;
   align-items: center;
