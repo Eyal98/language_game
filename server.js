@@ -35,6 +35,7 @@ const maxRounds = Math.max(wordsData.words.length, DEFAULT_MAX_ROUNDS);
 let gameState = {
   status: 'waiting',
   currentWord: null,
+  currentPlayer: 'player1',
   scores: { player1: 0, player2: 0 },
   roundNumber: 0,
   totalRounds: maxRounds,
@@ -104,11 +105,15 @@ function startNewRound() {
   gameState.roundNumber++;
   gameState.roundLocked = false;
   gameState.status = 'playing';
+  // Single shared reader: players alternate turns. Player 1 takes odd rounds,
+  // player 2 takes even rounds. totalRounds is forced even so turns are equal.
+  gameState.currentPlayer = gameState.roundNumber % 2 === 1 ? 'player1' : 'player2';
 
   broadcast({
     event: 'newRound',
     roundNumber: gameState.roundNumber,
     totalRounds: gameState.totalRounds,
+    currentPlayer: gameState.currentPlayer,
     word: {
       id: gameState.currentWord.id,
       hebrew: gameState.currentWord.hebrew,
@@ -128,6 +133,7 @@ function startNewRound() {
       broadcast({
         event: 'roundTimeout',
         word: gameState.currentWord,
+        currentPlayer: gameState.currentPlayer,
         scores: gameState.scores
       });
       scheduleNextRound();
@@ -138,8 +144,11 @@ function startNewRound() {
 function startGame() {
   const registeredWords = wordsData.words.filter(w => w.cardUid !== null);
   const count = Math.min(registeredWords.length, maxRounds);
-  if (count === 0) {
-    return { error: 'No cards registered. Use /admin to register cards first.' };
+  // Force an even number of rounds so each player gets the same number of
+  // turns on the shared reader. Leftover odd card isn't played this game.
+  const evenCount = count - (count % 2);
+  if (evenCount < 2) {
+    return { error: 'Register at least 2 cards in /admin to start a two-player game.' };
   }
 
   // Cancel any pending timers from a previous game so they can't fire into
@@ -149,7 +158,8 @@ function startGame() {
   gameState.status = 'playing';
   gameState.scores = { player1: 0, player2: 0 };
   gameState.roundNumber = 0;
-  gameState.totalRounds = count;
+  gameState.totalRounds = evenCount;
+  gameState.currentPlayer = 'player1';
   gameState.usedWords = [];
   gameState.shuffledWords = shuffleArray(registeredWords);
   gameState.roundLocked = false;
@@ -179,6 +189,7 @@ app.get('/api/status', (req, res) => {
     scores: gameState.scores,
     roundNumber: gameState.roundNumber,
     totalRounds: gameState.totalRounds,
+    currentPlayer: gameState.currentPlayer,
     lastScannedUid: gameState.lastScannedUid
   });
 });
@@ -199,6 +210,7 @@ app.post('/api/game/skip', (req, res) => {
   broadcast({
     event: 'roundSkipped',
     word: gameState.currentWord,
+    currentPlayer: gameState.currentPlayer,
     scores: gameState.scores
   });
   scheduleNextRound();
@@ -206,15 +218,17 @@ app.post('/api/game/skip', (req, res) => {
 });
 
 app.post('/api/scan', (req, res) => {
-  const { reader, uid } = req.body;
-  if (typeof uid !== 'string' || !uid.trim() || (reader !== 1 && reader !== 2)) {
-    return res.status(400).json({ error: 'Missing or invalid reader (must be 1 or 2) or uid' });
+  const { uid } = req.body;
+  if (typeof uid !== 'string' || !uid.trim()) {
+    return res.status(400).json({ error: 'Missing or invalid uid' });
   }
 
   const normalizedUid = uid.trim().toUpperCase();
   gameState.lastScannedUid = normalizedUid;
 
-  const player = reader === 1 ? 'player1' : 'player2';
+  // Single shared reader: the scan belongs to whoever's turn it is. The
+  // Arduino's `reader` field is accepted but ignored for player identity.
+  const player = gameState.currentPlayer;
 
   if (gameState.status !== 'playing' || gameState.roundLocked) {
     broadcast({ event: 'cardScanned', uid: normalizedUid, player });
@@ -281,6 +295,7 @@ wss.on('connection', (ws) => {
     scores: gameState.scores,
     roundNumber: gameState.roundNumber,
     totalRounds: gameState.totalRounds,
+    currentPlayer: gameState.currentPlayer,
     showNikkud: gameState.showNikkud,
     currentWord: gameState.status === 'playing' ? {
       id: gameState.currentWord.id,
@@ -310,6 +325,7 @@ wss.on('connection', (ws) => {
         broadcast({
           event: 'roundSkipped',
           word: gameState.currentWord,
+          currentPlayer: gameState.currentPlayer,
           scores: gameState.scores
         });
         scheduleNextRound();

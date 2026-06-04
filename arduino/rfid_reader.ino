@@ -1,18 +1,19 @@
 /*
- * Hebrew RFID Game - Dual Reader (both players on one Arduino)
+ * Hebrew RFID Game - Single Reader (turn-based, both players share one reader)
+ *
+ * Players take turns on a single RFID reader. The server tracks whose turn it
+ * is, so this sketch just reports each scan; it does not identify the player.
  *
  * Hardware:
  *   - Arduino Uno/Leonardo
- *   - 2x MFRC522 RFID readers, sharing SPI bus
+ *   - 1x MFRC522 RFID reader
  *   - ESP8266 WiFi module via SoftwareSerial
  *
  * Wiring:
- *   Both readers share: SCK=13, MOSI=11, MISO=12
- *   Reader 1 (Player 1): SDA=10, RST=9
- *   Reader 2 (Player 2): SDA=4,  RST=8
- *   WiFi ESP8266:        RX=2,   TX=3
- *   LED Green P1=6, LED Red P1=7
- *   LED Green P2=5, LED Red P2=A0
+ *   Reader shares SPI: SCK=13, MOSI=11, MISO=12
+ *   Reader:            SDA=10, RST=9
+ *   WiFi ESP8266:      RX=2,   TX=3
+ *   LED Green=6, LED Red=7
  */
 
 #include <SPI.h>
@@ -27,15 +28,11 @@
 #define WIFI_PASS   "YourNetworkPassword"
 
 // ===== PINS =====
-#define SS1_PIN     10    // Reader 1 SS (Player 1)
-#define RST1_PIN    9     // Reader 1 RST
-#define SS2_PIN     4     // Reader 2 SS (Player 2)
-#define RST2_PIN    8     // Reader 2 RST
+#define SS_PIN      10    // Reader SS
+#define RST_PIN     9     // Reader RST
 
-#define LED_GREEN_P1  6
-#define LED_RED_P1    7
-#define LED_GREEN_P2  5
-#define LED_RED_P2    A0
+#define LED_GREEN   6
+#define LED_RED     7
 
 #define WIFI_RX     2     // ESP8266 TX -> Arduino pin 2
 #define WIFI_TX     3     // ESP8266 RX -> Arduino pin 3
@@ -43,25 +40,20 @@
 // ===== DEBOUNCE =====
 #define DEBOUNCE_MS  2000
 
-MFRC522 reader1(SS1_PIN, RST1_PIN);
-MFRC522 reader2(SS2_PIN, RST2_PIN);
+MFRC522 reader(SS_PIN, RST_PIN);
 
 SoftwareSerial espSerial(WIFI_RX, WIFI_TX);
 WiFiEspClient client;
 
-String lastUid1 = "";
-String lastUid2 = "";
-unsigned long lastScanTime1 = 0;
-unsigned long lastScanTime2 = 0;
+String lastUid = "";
+unsigned long lastScanTime = 0;
 
 void setup() {
   Serial.begin(115200);
   espSerial.begin(9600);
 
-  pinMode(LED_GREEN_P1, OUTPUT);
-  pinMode(LED_RED_P1,   OUTPUT);
-  pinMode(LED_GREEN_P2, OUTPUT);
-  pinMode(LED_RED_P2,   OUTPUT);
+  pinMode(LED_GREEN, OUTPUT);
+  pinMode(LED_RED,   OUTPUT);
 
   WiFi.init(&espSerial);
 
@@ -71,22 +63,20 @@ void setup() {
     Serial.println(" Connected!");
     Serial.print("IP: ");
     Serial.println(WiFi.localIP());
-    blinkBoth(LED_GREEN_P1, LED_GREEN_P2, 3);
+    blinkLed(LED_GREEN, 3);
   } else {
     Serial.println(" Failed!");
-    blinkBoth(LED_RED_P1, LED_RED_P2, 5);
+    blinkLed(LED_RED, 5);
   }
 
   SPI.begin();
-  reader1.PCD_Init();
-  reader2.PCD_Init();
-  Serial.println("Both RFID readers ready.");
+  reader.PCD_Init();
+  Serial.println("RFID reader ready.");
 }
 
 void loop() {
   ensureWifi();
-  checkReader(reader1, 1, lastUid1, lastScanTime1, LED_GREEN_P1, LED_RED_P1);
-  checkReader(reader2, 2, lastUid2, lastScanTime2, LED_GREEN_P2, LED_RED_P2);
+  checkReader(reader, lastUid, lastScanTime, LED_GREEN, LED_RED);
 }
 
 // Reconnect to WiFi if the link drops, so a brief outage doesn't take the
@@ -99,15 +89,15 @@ void ensureWifi() {
   int status = WiFi.begin(WIFI_SSID, WIFI_PASS);
   if (status == WL_CONNECTED) {
     Serial.println(" reconnected!");
-    blinkBoth(LED_GREEN_P1, LED_GREEN_P2, 2);
+    blinkLed(LED_GREEN, 2);
   } else {
     Serial.println(" failed, will retry.");
-    blinkBoth(LED_RED_P1, LED_RED_P2, 2);
+    blinkLed(LED_RED, 2);
     delay(1000);
   }
 }
 
-void checkReader(MFRC522 &reader, int readerId,
+void checkReader(MFRC522 &reader,
                  String &lastUid, unsigned long &lastScanTime,
                  int ledGreen, int ledRed) {
   if (!reader.PICC_IsNewCardPresent() || !reader.PICC_ReadCardSerial()) {
@@ -126,12 +116,10 @@ void checkReader(MFRC522 &reader, int readerId,
   lastUid = uid;
   lastScanTime = now;
 
-  Serial.print("Player ");
-  Serial.print(readerId);
-  Serial.print(" scanned: ");
+  Serial.print("Scanned: ");
   Serial.println(uid);
 
-  String response = sendScan(readerId, uid);
+  String response = sendScan(uid);
   String status = parseStatus(response);
 
   if (status == "correct") {
@@ -173,8 +161,10 @@ String getUidString(MFRC522 &reader) {
   return uid;
 }
 
-String sendScan(int readerId, String uid) {
-  String body = "{\"reader\":" + String(readerId) + ",\"uid\":\"" + uid + "\"}";
+String sendScan(String uid) {
+  // `reader` is kept for backward-compat with the server; it is ignored for
+  // player identity (the server tracks whose turn it is).
+  String body = "{\"reader\":1,\"uid\":\"" + uid + "\"}";
   String response = "";
 
   if (client.connect(SERVER_IP, SERVER_PORT)) {
@@ -200,7 +190,7 @@ String sendScan(int readerId, String uid) {
     client.stop();
   } else {
     Serial.println("Connection failed");
-    blinkBoth(LED_RED_P1, LED_RED_P2, 2);
+    blinkLed(LED_RED, 2);
   }
 
   return response;
@@ -211,17 +201,6 @@ void blinkLed(int pin, int times) {
     digitalWrite(pin, HIGH);
     delay(150);
     digitalWrite(pin, LOW);
-    delay(150);
-  }
-}
-
-void blinkBoth(int pin1, int pin2, int times) {
-  for (int i = 0; i < times; i++) {
-    digitalWrite(pin1, HIGH);
-    digitalWrite(pin2, HIGH);
-    delay(150);
-    digitalWrite(pin1, LOW);
-    digitalWrite(pin2, LOW);
     delay(150);
   }
 }

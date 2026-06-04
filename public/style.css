@@ -232,6 +232,20 @@ body {
   box-shadow: 0 3px 10px var(--shadow);
 }
 
+.turn-banner {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: white;
+  padding: 0.5rem 1.5rem;
+  border-radius: 15px;
+  box-shadow: 0 3px 10px var(--shadow);
+  transition: background 0.3s;
+}
+
+.turn-banner:empty {
+  display: none;
+}
+
 .game-main {
   display: flex;
   align-items: center;
@@ -253,7 +267,19 @@ body {
   color: white;
   min-width: 220px;
   box-shadow: 0 6px 20px var(--shadow);
-  transition: transform 0.3s;
+  transition: transform 0.3s, opacity 0.3s, filter 0.3s;
+}
+
+/* Turn-based: dim the player who is not currently up. */
+.player-score:not(.active-turn) {
+  opacity: 0.4;
+  filter: grayscale(0.4);
+}
+
+.player-score.active-turn {
+  opacity: 1;
+  transform: scale(1.06);
+  box-shadow: 0 0 28px rgba(255, 255, 255, 0.55);
 }
 
 .player-name {
@@ -465,4 +491,5 @@ body {
   .score-value { font-size: 3.5rem; }
   .player-name { font-size: 1.2rem; }
   .btn-start { font-size: 1.8rem; }
+  .turn-banner { font-size: 1.2rem; padding: 0.4rem 1rem; }
 }
