@@ -8,7 +8,8 @@
       "english": "Dog",
       "emoji": "🐶",
       "category": "animal",
-      "cardUid": null
+      "cardUidP1": "AA BB CC 01",
+      "cardUidP2": "AA BB CC 02"
     },
     {
       "id": "cat",
@@ -18,7 +19,8 @@
       "english": "Cat",
       "emoji": "🐱",
       "category": "animal",
-      "cardUid": null
+      "cardUidP1": "AA BB CC 03",
+      "cardUidP2": "AA BB CC 04"
     },
     {
       "id": "fish",
@@ -28,7 +30,8 @@
       "english": "Fish",
       "emoji": "🐟",
       "category": "animal",
-      "cardUid": null
+      "cardUidP1": null,
+      "cardUidP2": null
     },
     {
       "id": "red",
@@ -38,7 +41,8 @@
       "english": "Red",
       "emoji": "🔴",
       "category": "color",
-      "cardUid": null
+      "cardUidP1": null,
+      "cardUidP2": null
     },
     {
       "id": "blue",
@@ -48,7 +52,8 @@
       "english": "Blue",
       "emoji": "🔵",
       "category": "color",
-      "cardUid": null
+      "cardUidP1": null,
+      "cardUidP2": null
     },
     {
       "id": "apple",
@@ -58,7 +63,8 @@
       "english": "Apple",
       "emoji": "🍎",
       "category": "food",
-      "cardUid": null
+      "cardUidP1": null,
+      "cardUidP2": null
     },
     {
       "id": "banana",
@@ -68,7 +74,8 @@
       "english": "Banana",
       "emoji": "🍌",
       "category": "food",
-      "cardUid": null
+      "cardUidP1": null,
+      "cardUidP2": null
     },
     {
       "id": "flower",
@@ -78,7 +85,8 @@
       "english": "Flower",
       "emoji": "🌸",
       "category": "nature",
-      "cardUid": null
+      "cardUidP1": null,
+      "cardUidP2": null
     }
   ]
 }

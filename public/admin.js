@@ -15,12 +15,40 @@ async function loadWords() {
   render();
 }
 
+// A word is "ready" to play only when both players' cards are assigned.
+function isReady(w) {
+  return !!w.cardUidP1 && !!w.cardUidP2;
+}
+
+function slotMarkup(w, slot) {
+  const uid = slot === 1 ? w.cardUidP1 : w.cardUidP2;
+  const label = slot === 1 ? 'Player 1' : 'Player 2';
+  const cls = slot === 1 ? 'slot-p1' : 'slot-p2';
+  return `
+    <div class="card-slot ${cls} ${uid ? 'assigned' : ''}">
+      <div class="slot-label">${label}</div>
+      <div class="card-uid-display ${uid ? '' : 'none'}">
+        ${uid ? uid : 'No card'}
+      </div>
+      <div class="slot-actions">
+        <button class="btn btn-use-last" onclick="assignLastScan('${w.id}', ${slot})"
+          ${lastScannedUid ? '' : 'disabled'}>
+          Use Last Scan
+        </button>
+        ${uid
+          ? `<button class="btn btn-remove" onclick="removeCard('${w.id}', ${slot})">Remove</button>`
+          : ''
+        }
+      </div>
+    </div>`;
+}
+
 function render() {
-  const registered = words.filter(w => w.cardUid).length;
-  registeredCountEl.textContent = registered;
+  const ready = words.filter(isReady).length;
+  registeredCountEl.textContent = ready;
 
   grid.innerHTML = words.map(w => `
-    <div class="word-card ${w.cardUid ? 'registered' : ''}" id="card-${w.id}">
+    <div class="word-card ${isReady(w) ? 'registered' : ''}" id="card-${w.id}">
       <div class="word-header">
         <span class="word-emoji">${w.emoji}</span>
         <div class="word-info">
@@ -29,30 +57,21 @@ function render() {
         </div>
       </div>
       <div class="word-category">${w.category}</div>
-      <div class="card-uid-display ${w.cardUid ? '' : 'none'}">
-        ${w.cardUid ? 'UID: ' + w.cardUid : 'No card assigned'}
-      </div>
-      <div class="word-actions">
-        <button class="btn btn-use-last" onclick="assignLastScan('${w.id}')"
-          ${lastScannedUid ? '' : 'disabled'}>
-          Use Last Scan
-        </button>
-        ${w.cardUid
-          ? `<button class="btn btn-remove" onclick="removeCard('${w.id}')">Remove</button>`
-          : ''
-        }
+      <div class="card-slots">
+        ${slotMarkup(w, 1)}
+        ${slotMarkup(w, 2)}
       </div>
     </div>
   `).join('');
 }
 
-async function assignLastScan(wordId) {
+async function assignLastScan(wordId, slot) {
   if (!lastScannedUid) return;
 
   const res = await fetch(`/api/words/${wordId}/card`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ uid: lastScannedUid })
+    body: JSON.stringify({ uid: lastScannedUid, slot })
   });
 
   if (!res.ok) {
@@ -62,19 +81,19 @@ async function assignLastScan(wordId) {
   }
 
   const word = words.find(w => w.id === wordId);
-  if (word) word.cardUid = lastScannedUid;
+  if (word) word[slot === 1 ? 'cardUidP1' : 'cardUidP2'] = lastScannedUid;
   render();
 }
 
-async function removeCard(wordId) {
-  const res = await fetch(`/api/words/${wordId}/card`, { method: 'DELETE' });
+async function removeCard(wordId, slot) {
+  const res = await fetch(`/api/words/${wordId}/card?slot=${slot}`, { method: 'DELETE' });
   if (!res.ok) {
     alert('Failed to remove card');
     return;
   }
 
   const word = words.find(w => w.id === wordId);
-  if (word) word.cardUid = null;
+  if (word) word[slot === 1 ? 'cardUidP1' : 'cardUidP2'] = null;
   render();
 }
 
@@ -97,13 +116,13 @@ function connectWebSocket() {
 
     if (data.event === 'cardRegistered') {
       const word = words.find(w => w.id === data.wordId);
-      if (word) word.cardUid = data.uid;
+      if (word) word[data.slot === 1 ? 'cardUidP1' : 'cardUidP2'] = data.uid;
       render();
     }
 
     if (data.event === 'cardUnregistered') {
       const word = words.find(w => w.id === data.wordId);
-      if (word) word.cardUid = null;
+      if (word) word[data.slot === 1 ? 'cardUidP1' : 'cardUidP2'] = null;
       render();
     }
   };

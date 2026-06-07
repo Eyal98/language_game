@@ -150,6 +150,34 @@
       color: var(--text-light);
     }
 
+    .card-slots {
+      display: flex;
+      gap: 0.6rem;
+    }
+
+    .card-slot {
+      flex: 1;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 0.8rem;
+    }
+
+    .card-slot.slot-p1 { border-top: 4px solid #4ECDC4; }
+    .card-slot.slot-p2 { border-top: 4px solid #FF6B6B; }
+    .card-slot.assigned { border-color: var(--success); }
+
+    .slot-label {
+      font-weight: 700;
+      font-size: 0.95rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .slot-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
     .word-actions {
       display: flex;
       gap: 0.5rem;
@@ -205,11 +233,11 @@
 <body>
   <a href="/" class="nav-link">&larr; Back to Game</a>
   <h1>Card Registration</h1>
-  <p class="subtitle">Scan each RFID card on a reader and assign it to a word.</p>
+  <p class="subtitle">Each word needs two cards — one for Player 1 and one for Player 2. Scan a card, then click "Use Last Scan" under the player slot you want to assign it to.</p>
 
   <div class="status-bar">
     <div class="status-item">
-      Registered: <span class="count" id="registered-count">0</span> / <span id="total-count">8</span>
+      Ready words: <span class="count" id="registered-count">0</span> / <span id="total-count">8</span>
     </div>
   </div>
 

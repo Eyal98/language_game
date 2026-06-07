@@ -1,16 +1,18 @@
 # Hebrew Word Game 🎮
 
-A two-player, turn-based Hebrew vocabulary game using RFID cards. Players share **one** RFID reader and take turns: the screen shows a Hebrew word and highlights whose turn it is — that player scans the matching picture card to score. Most points after all rounds wins!
+A two-player Hebrew vocabulary **race** game using RFID cards — on a single reader, no WiFi required. Each word has **two** matching cards: one belonging to Player 1, one to Player 2. The screen shows a Hebrew word and both players race to scan their own matching picture card. The card's UID tells the server who scanned, so the first correct scan wins the round. Most points after all rounds wins!
+
+> **Earlier versions:** the two-reader racing version is preserved at the `two-scanners-v1` tag; a single-reader turn-based variant exists in git history.
 
 ---
 
 ## How It Works
 
-1. Each physical card has a picture on it (dog, cat, apple, etc.)
-2. The screen shows a Hebrew word and whose turn it is
-3. The active player searches their cards for the matching picture
-4. They scan the correct card on the shared reader to score the round
-5. Turns alternate between the two players each round
+1. Each word has two physical cards with the same picture — one for each player
+2. The screen shows a Hebrew word
+3. Both players race to find and scan their matching picture card on the shared reader
+4. The scanned card's UID identifies the picture **and** which player scanned it
+5. First correct scan wins the round and scores a point
 6. Most points after all rounds wins!
 
 ---
@@ -21,10 +23,9 @@ A two-player, turn-based Hebrew vocabulary game using RFID cards. Players share 
 - [Node.js](https://nodejs.org) (v16 or later)
 
 ### Hardware (optional — game works without it for testing)
-- Arduino Uno or Leonardo
+- Arduino Uno or Leonardo, connected to the PC over **USB** (no WiFi module needed)
 - 1× MFRC522 RFID reader module (shared by both players)
-- ESP8266 WiFi module
-- 4–8 RFID cards or key fobs (13.56 MHz / MIFARE)
+- Two RFID cards/fobs per word you want to play (one per player), 13.56 MHz / MIFARE
 - 2 LEDs (green + red) + 220Ω resistors (optional, for scan feedback)
 
 ---
@@ -66,17 +67,20 @@ The game includes 8 words across four categories:
 
 ## Playing Without Hardware
 
-You can test the full game using `curl` to simulate card scans.
+You can test the full game using `curl` to simulate card scans. Each word needs
+**two** cards registered (one per player) before it can be played.
 
-**1. Register some cards (use any made-up UIDs):**
+**1. Register both cards for a word (use any made-up UIDs):**
 ```bash
+# Player 1's "dog" card  (slot 1)
 curl -X POST http://localhost:3000/api/words/dog/card \
   -H "Content-Type: application/json" \
-  -d "{\"uid\": \"AA BB CC 01\"}"
+  -d "{\"uid\": \"AA BB CC 01\", \"slot\": 1}"
 
-curl -X POST http://localhost:3000/api/words/cat/card \
+# Player 2's "dog" card  (slot 2)
+curl -X POST http://localhost:3000/api/words/dog/card \
   -H "Content-Type: application/json" \
-  -d "{\"uid\": \"AA BB CC 02\"}"
+  -d "{\"uid\": \"AA BB CC 02\", \"slot\": 2}"
 ```
 
 **2. Start the game:**
@@ -84,12 +88,13 @@ curl -X POST http://localhost:3000/api/words/cat/card \
 curl -X POST http://localhost:3000/api/game/start
 ```
 
-**3. Simulate a scan.** With a single shared reader, the server attributes the
-scan to whoever's turn it is — the `reader` field is accepted but ignored:
+**3. Simulate a scan.** The card UID alone identifies both the word and the
+player — there is no separate player/reader field:
 ```bash
+# Player 2 scans their dog card — wins the round if "dog" is showing
 curl -X POST http://localhost:3000/api/scan \
   -H "Content-Type: application/json" \
-  -d "{\"reader\": 1, \"uid\": \"AA BB CC 01\"}"
+  -d "{\"uid\": \"AA BB CC 02\"}"
 ```
 
 **4. Skip a round:**
@@ -99,7 +104,11 @@ curl -X POST http://localhost:3000/api/game/skip
 
 ---
 
-## Arduino Setup
+## Arduino Setup (USB — no WiFi)
+
+The Arduino connects to the PC over USB and prints each scanned card UID, one
+per line, over the serial port. The Node server reads that port and runs the
+game. No WiFi module is required.
 
 ### Wiring (single shared reader)
 
@@ -114,53 +123,51 @@ Pin  9 ───── RST  (Reader)
 3.3V   ───── VCC  (Reader) ⚠️ NOT 5V!
 GND    ───── GND  (Reader)
 
-Pin  2 ───── ESP8266 TX (WiFi module)
-Pin  3 ───── ESP8266 RX (WiFi module, use voltage divider)
-
 Pin  6 ───── Green LED (correct scan) + 220Ω to GND
 Pin  7 ───── Red LED   (wrong scan)   + 220Ω to GND
 ```
 
 ### Arduino Libraries
 
-Install these via **Arduino IDE → Sketch → Include Library → Manage Libraries**:
+Install via **Arduino IDE → Sketch → Include Library → Manage Libraries**:
 - `MFRC522` by GithubCommunity
-- `WiFiEsp` by bportaluri
-
-### Configure the sketch
-
-Open `arduino/rfid_reader.ino` and update these lines at the top:
-
-```cpp
-#define SERVER_IP   "192.168.1.100"   // Your PC's local IP address
-#define SERVER_PORT 3000
-#define WIFI_SSID   "YourNetworkName"
-#define WIFI_PASS   "YourNetworkPassword"
-```
-
-To find your PC's local IP on Windows:
-```
-ipconfig
-```
-Look for the IPv4 address under your WiFi adapter.
 
 ### Upload
 
-Upload the sketch to the Arduino. The LEDs will blink green 3 times when WiFi connects successfully.
+Upload `arduino/rfid_reader.ino`. The green LED blinks twice when the reader is
+ready. The sketch uses serial at **115200 baud** (matching the server default).
+
+### Connect the server to the reader
+
+The serial bridge is built into the server but **off by default**. Enable it by
+telling the server which port the Arduino is on:
+
+```bash
+# Linux/macOS
+SERIAL_PORT=/dev/ttyACM0 npm start
+
+# Windows (PowerShell)
+$env:SERIAL_PORT="COM3"; npm start
+```
+
+This needs the optional `serialport` package (installed automatically by
+`npm install` when your platform supports it). If `SERIAL_PORT` is not set, the
+server runs normally for web/`curl` play. Override the baud rate with
+`SERIAL_BAUD`.
 
 ---
 
 ## Registering Cards
 
-1. Start the server (`npm start`)
+1. Start the server (`npm start`, with `SERIAL_PORT` set if using hardware)
 2. Open `http://localhost:3000/admin`
-3. Power on the Arduino — it will connect to WiFi
-4. Scan any card near a reader
-5. The "Last Scanned Card UID" updates on the admin page
-6. Click **Use Last Scan** next to the word you want to assign that card to
-7. Repeat for all cards
+3. Scan a card on the reader — its UID appears as "Last Scanned Card UID"
+4. Click **Use Last Scan** under the **Player 1** or **Player 2** slot of the
+   word you want to assign it to. Each word needs both slots filled to be playable.
+5. Repeat for all cards — only words with both slots filled are used in a game.
 
-> **Tip:** You can assign the same card to multiple words if you have fewer cards than words. During gameplay, a card is only correct when it matches the word currently shown on screen.
+> **Tip:** A word card on the admin page turns green once both players' cards are
+> assigned. The "Ready words" counter shows how many words can be played.
 
 ---
 
@@ -168,9 +175,6 @@ Upload the sketch to the Arduino. The LEDs will blink green 3 times when WiFi co
 
 ### Nikkud toggle
 The Nikkud toggle (vowel marks) on the welcome screen and during gameplay shows/hides the small dots and dashes that indicate how to pronounce Hebrew words. Turn it off to make the game harder.
-
-### Card sharing
-You can map fewer cards to more words (e.g. 4 cards for 8 words). Each card can be assigned to 2 different words. Scan the card, assign it to the first word, scan it again, assign it to the second word.
 
 ---
 
@@ -202,18 +206,21 @@ netstat -ano | findstr :3000
 taskkill /PID <PID> /F
 ```
 
-**Arduino can't connect to WiFi**
-- Red LEDs blink 5 times on startup if WiFi fails
-- Double-check `WIFI_SSID` and `WIFI_PASS` in the sketch
-- Make sure the server PC and Arduino are on the same network
+**Server isn't reading the Arduino**
+- Make sure you started the server with `SERIAL_PORT` set to the right port
+  (e.g. `/dev/ttyACM0`, `/dev/tty.usbmodemXXXX`, or `COM3`)
+- Close the Arduino IDE Serial Monitor — only one program can hold the port
+- Confirm the baud rates match (sketch `SERIAL_BAUD` and server `SERIAL_BAUD`, both 115200 by default)
+- If `npm install` skipped `serialport` on your platform, install it explicitly: `npm install serialport`
 
 **Card not recognized**
 - Check the UID shown on the admin page matches what's registered
 - Make sure the card is held still and flat against the reader
+- A scan only scores if that card is assigned to the word currently on screen, in the matching player's slot
 
 **Game won't start**
-- At least one card must be registered in the admin page before starting
-- If you click Start with no cards registered, the welcome screen now shows a "Register cards first" message
+- Each playable word needs **both** the Player 1 and Player 2 cards assigned
+- If no word is fully assigned, the welcome screen shows an error explaining why
 
 ---
 
@@ -225,10 +232,15 @@ A few behaviors can be tuned with environment variables when starting the server
 |----------|---------|---------|
 | `PORT` | `3000` | HTTP/WebSocket port |
 | `MAX_ROUNDS` | number of words in `words.json` | Caps how many rounds a game runs |
+| `SERIAL_PORT` | _(unset — serial disabled)_ | Serial port of the USB Arduino (e.g. `/dev/ttyACM0`, `COM3`) |
+| `SERIAL_BAUD` | `115200` | Serial baud rate (must match the sketch) |
 
 ```bash
 # Example: run on port 8080 with at most 5 rounds
 PORT=8080 MAX_ROUNDS=5 npm start
+
+# Example: read the Arduino on COM3 (Windows PowerShell)
+$env:SERIAL_PORT="COM3"; npm start
 ```
 
 ---
