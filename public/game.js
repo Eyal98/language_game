@@ -13,6 +13,7 @@ const els = {
   roundNumber: document.getElementById('round-number'),
   totalRounds: document.getElementById('total-rounds'),
   wordDisplay: document.getElementById('word-display'),
+  wordDisplayAr: document.getElementById('word-display-ar'),
   wordFeedback: document.getElementById('word-feedback'),
   wordReveal: document.getElementById('word-reveal'),
   revealEmoji: document.getElementById('reveal-emoji'),
@@ -33,6 +34,8 @@ let showNikkud = true;
 let currentWord = null;
 let audioCtx;
 let timerWarningTimeout;
+let arabicRevealTimeout;        // delay before the Arabic word appears
+const ARABIC_DELAY_MS = 2000;   // show/speak Arabic this long after the Hebrew
 
 // ===== Sound Effects =====
 
@@ -79,6 +82,34 @@ function playGameOver() {
 
 function playTick() {
   playTone(1000, 0.05, 'sine', 0.1);
+}
+
+// ===== Speech (read the word aloud) =====
+// Uses the browser's built-in speech synthesis. Works offline, but only speaks
+// if the device has a voice for that language installed; otherwise it's a no-op.
+
+function pickVoice(langPrefix) {
+  if (!('speechSynthesis' in window)) return null;
+  const voices = window.speechSynthesis.getVoices();
+  return voices.find(v => v.lang && v.lang.toLowerCase().startsWith(langPrefix)) || null;
+}
+
+function speak(text, langPrefix, fullLang) {
+  if (!text || !('speechSynthesis' in window)) return;
+  const utter = new SpeechSynthesisUtterance(text);
+  const voice = pickVoice(langPrefix);
+  if (voice) utter.voice = voice;
+  utter.lang = voice ? voice.lang : fullLang; // hint the language even without a matched voice
+  utter.rate = 0.85;                          // a touch slow, for learners
+  try { window.speechSynthesis.speak(utter); } catch (e) { /* ignore */ }
+}
+
+function speakHebrew(word) {
+  speak(word.hebrew, 'he', 'he-IL');
+}
+
+function speakArabic(word) {
+  speak(word.arabic, 'ar', 'ar-SA');
 }
 
 // ===== Screen Management =====
@@ -141,17 +172,54 @@ function stopTimer() {
 
 // ===== UI Updates =====
 
-function updateWord(word) {
+// Render the Hebrew word now; the Arabic word follows after a short delay.
+// `withSpeech` controls whether we read the words aloud (true on a fresh round,
+// false when just re-rendering after a nikkud toggle).
+function updateWord(word, withSpeech = false) {
   currentWord = word;
+  clearTimeout(arabicRevealTimeout);
+
   if (!word) {
     els.wordDisplay.textContent = '';
+    els.wordDisplayAr.textContent = '';
+    els.wordDisplayAr.classList.add('hidden');
     return;
   }
+
   els.wordDisplay.textContent = showNikkud ? word.hebrewNikkud : word.hebrew;
   els.wordDisplay.style.animation = 'none';
   requestAnimationFrame(() => {
     els.wordDisplay.style.animation = 'wordAppear 0.5s ease';
   });
+  if (withSpeech) {
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    speakHebrew(word);
+  }
+
+  // If the Arabic is already visible (e.g. nikkud toggled mid-round), keep it in
+  // sync; otherwise reveal it after the delay.
+  const renderArabic = () => {
+    els.wordDisplayAr.textContent = showNikkud ? word.arabicNikkud : word.arabic;
+  };
+  if (!els.wordDisplayAr.classList.contains('hidden')) {
+    renderArabic();
+  } else {
+    arabicRevealTimeout = setTimeout(() => {
+      renderArabic();
+      els.wordDisplayAr.classList.remove('hidden');
+      els.wordDisplayAr.style.animation = 'none';
+      requestAnimationFrame(() => {
+        els.wordDisplayAr.style.animation = 'wordAppear 0.5s ease';
+      });
+      if (withSpeech) speakArabic(word);
+    }, ARABIC_DELAY_MS);
+  }
+}
+
+function hideArabic() {
+  clearTimeout(arabicRevealTimeout);
+  els.wordDisplayAr.classList.add('hidden');
+  els.wordDisplayAr.textContent = '';
 }
 
 function updateScores(scores) {
@@ -239,6 +307,7 @@ function handleEvent(data) {
       els.nikkudGame.checked = showNikkud;
       if (data.status === 'playing' && data.currentWord) {
         showScreen('playing');
+        hideArabic();
         updateWord(data.currentWord);
         updateScores(data.scores);
         els.roundNumber.textContent = data.roundNumber;
@@ -255,10 +324,11 @@ function handleEvent(data) {
     case 'newRound':
       showScreen('playing');
       hideReveal();
+      hideArabic();
       els.wordFeedback.textContent = '';
       els.roundNumber.textContent = data.roundNumber;
       els.totalRounds.textContent = data.totalRounds;
-      updateWord(data.word);
+      updateWord(data.word, true);
       updateScores(data.scores);
       startTimer(data.roundDurationMs || 30000);
       playChime();
@@ -366,6 +436,12 @@ els.nikkudWelcome.addEventListener('change', handleNikkudToggle);
 els.nikkudGame.addEventListener('change', handleNikkudToggle);
 
 // ===== Init =====
+
+// Warm up the speech voice list — getVoices() is often empty until this fires.
+if ('speechSynthesis' in window) {
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+}
 
 document.fonts.ready.then(() => {
   connectEvents();

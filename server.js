@@ -57,6 +57,18 @@ function identifyCard(uid) {
   return null;
 }
 
+// The word fields the clients need (the card UIDs are kept private).
+function publicWord(w) {
+  return {
+    id: w.id,
+    hebrew: w.hebrew,
+    hebrewNikkud: w.hebrewNikkud,
+    arabic: w.arabic,
+    arabicNikkud: w.arabicNikkud,
+    category: w.category
+  };
+}
+
 let roundTimer = null;     // the in-round countdown (ROUND_TIMEOUT_MS)
 let nextRoundTimer = null; // the inter-round delay before the next word (ROUND_DELAY_MS)
 
@@ -116,12 +128,7 @@ function startNewRound() {
     event: 'newRound',
     roundNumber: gameState.roundNumber,
     totalRounds: gameState.totalRounds,
-    word: {
-      id: gameState.currentWord.id,
-      hebrew: gameState.currentWord.hebrew,
-      hebrewNikkud: gameState.currentWord.hebrewNikkud,
-      category: gameState.currentWord.category
-    },
+    word: publicWord(gameState.currentWord),
     showNikkud: gameState.showNikkud,
     roundDurationMs: ROUND_TIMEOUT_MS,
     scores: gameState.scores
@@ -235,12 +242,7 @@ function connectedSnapshot() {
     roundNumber: gameState.roundNumber,
     totalRounds: gameState.totalRounds,
     showNikkud: gameState.showNikkud,
-    currentWord: gameState.status === 'playing' ? {
-      id: gameState.currentWord.id,
-      hebrew: gameState.currentWord.hebrew,
-      hebrewNikkud: gameState.currentWord.hebrewNikkud,
-      category: gameState.currentWord.category
-    } : null
+    currentWord: gameState.status === 'playing' ? publicWord(gameState.currentWord) : null
   };
 }
 

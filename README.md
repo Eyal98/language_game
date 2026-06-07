@@ -62,8 +62,16 @@ The game includes 14 words across four categories. Add or edit them in
 | Food | Apple, Banana, Bread |
 | Nature | Flower, Sun |
 
-Each word also stores its nikkud, transliteration, and an emoji (shown on the
-admin page and the round reveal).
+Each word is **bilingual**: it stores Hebrew and Arabic (both with and without
+vowel marks), transliterations, and an emoji. During a round the Hebrew word
+shows first and is read aloud; about 2 seconds later the Arabic word appears
+below it and is read aloud too.
+
+> **Read-aloud** uses the browser's built-in speech synthesis. It works offline,
+> but a word is only spoken if the device has a voice for that language
+> installed (Hebrew `he`, Arabic `ar`). With no matching voice the text still
+> shows; it just isn't spoken. Most phones/tablets can add language voices in
+> their system settings.
 
 ---
 
