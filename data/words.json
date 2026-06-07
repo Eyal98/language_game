@@ -34,6 +34,72 @@
       "cardUidP2": null
     },
     {
+      "id": "bird",
+      "hebrew": "ציפור",
+      "hebrewNikkud": "צִפּוֹר",
+      "transliteration": "tsipor",
+      "english": "Bird",
+      "emoji": "🐦",
+      "category": "animal",
+      "cardUidP1": null,
+      "cardUidP2": null
+    },
+    {
+      "id": "horse",
+      "hebrew": "סוס",
+      "hebrewNikkud": "סוּס",
+      "transliteration": "sus",
+      "english": "Horse",
+      "emoji": "🐴",
+      "category": "animal",
+      "cardUidP1": null,
+      "cardUidP2": null
+    },
+    {
+      "id": "cow",
+      "hebrew": "פרה",
+      "hebrewNikkud": "פָּרָה",
+      "transliteration": "para",
+      "english": "Cow",
+      "emoji": "🐄",
+      "category": "animal",
+      "cardUidP1": null,
+      "cardUidP2": null
+    },
+    {
+      "id": "lion",
+      "hebrew": "אריה",
+      "hebrewNikkud": "אַרְיֵה",
+      "transliteration": "arye",
+      "english": "Lion",
+      "emoji": "🦁",
+      "category": "animal",
+      "cardUidP1": null,
+      "cardUidP2": null
+    },
+    {
+      "id": "elephant",
+      "hebrew": "פיל",
+      "hebrewNikkud": "פִּיל",
+      "transliteration": "pil",
+      "english": "Elephant",
+      "emoji": "🐘",
+      "category": "animal",
+      "cardUidP1": null,
+      "cardUidP2": null
+    },
+    {
+      "id": "monkey",
+      "hebrew": "קוף",
+      "hebrewNikkud": "קוֹף",
+      "transliteration": "kof",
+      "english": "Monkey",
+      "emoji": "🐒",
+      "category": "animal",
+      "cardUidP1": null,
+      "cardUidP2": null
+    },
+    {
       "id": "red",
       "hebrew": "אדום",
       "hebrewNikkud": "אָדֹם",
@@ -51,6 +117,50 @@
       "transliteration": "kachol",
       "english": "Blue",
       "emoji": "🔵",
+      "category": "color",
+      "cardUidP1": null,
+      "cardUidP2": null
+    },
+    {
+      "id": "green",
+      "hebrew": "ירוק",
+      "hebrewNikkud": "יָרֹק",
+      "transliteration": "yarok",
+      "english": "Green",
+      "emoji": "🟢",
+      "category": "color",
+      "cardUidP1": null,
+      "cardUidP2": null
+    },
+    {
+      "id": "yellow",
+      "hebrew": "צהוב",
+      "hebrewNikkud": "צָהֹב",
+      "transliteration": "tsahov",
+      "english": "Yellow",
+      "emoji": "🟡",
+      "category": "color",
+      "cardUidP1": null,
+      "cardUidP2": null
+    },
+    {
+      "id": "black",
+      "hebrew": "שחור",
+      "hebrewNikkud": "שָׁחֹר",
+      "transliteration": "shachor",
+      "english": "Black",
+      "emoji": "⚫",
+      "category": "color",
+      "cardUidP1": null,
+      "cardUidP2": null
+    },
+    {
+      "id": "white",
+      "hebrew": "לבן",
+      "hebrewNikkud": "לָבָן",
+      "transliteration": "lavan",
+      "english": "White",
+      "emoji": "⚪",
       "category": "color",
       "cardUidP1": null,
       "cardUidP2": null
@@ -78,12 +188,111 @@
       "cardUidP2": null
     },
     {
+      "id": "bread",
+      "hebrew": "לחם",
+      "hebrewNikkud": "לֶחֶם",
+      "transliteration": "lechem",
+      "english": "Bread",
+      "emoji": "🍞",
+      "category": "food",
+      "cardUidP1": null,
+      "cardUidP2": null
+    },
+    {
+      "id": "milk",
+      "hebrew": "חלב",
+      "hebrewNikkud": "חָלָב",
+      "transliteration": "chalav",
+      "english": "Milk",
+      "emoji": "🥛",
+      "category": "food",
+      "cardUidP1": null,
+      "cardUidP2": null
+    },
+    {
+      "id": "egg",
+      "hebrew": "ביצה",
+      "hebrewNikkud": "בֵּיצָה",
+      "transliteration": "beitsa",
+      "english": "Egg",
+      "emoji": "🥚",
+      "category": "food",
+      "cardUidP1": null,
+      "cardUidP2": null
+    },
+    {
+      "id": "grapes",
+      "hebrew": "ענבים",
+      "hebrewNikkud": "עֲנָבִים",
+      "transliteration": "anavim",
+      "english": "Grapes",
+      "emoji": "🍇",
+      "category": "food",
+      "cardUidP1": null,
+      "cardUidP2": null
+    },
+    {
       "id": "flower",
       "hebrew": "פרח",
       "hebrewNikkud": "פֶּרַח",
       "transliteration": "perach",
       "english": "Flower",
       "emoji": "🌸",
+      "category": "nature",
+      "cardUidP1": null,
+      "cardUidP2": null
+    },
+    {
+      "id": "sun",
+      "hebrew": "שמש",
+      "hebrewNikkud": "שֶׁמֶשׁ",
+      "transliteration": "shemesh",
+      "english": "Sun",
+      "emoji": "☀️",
+      "category": "nature",
+      "cardUidP1": null,
+      "cardUidP2": null
+    },
+    {
+      "id": "moon",
+      "hebrew": "ירח",
+      "hebrewNikkud": "יָרֵחַ",
+      "transliteration": "yareach",
+      "english": "Moon",
+      "emoji": "🌙",
+      "category": "nature",
+      "cardUidP1": null,
+      "cardUidP2": null
+    },
+    {
+      "id": "tree",
+      "hebrew": "עץ",
+      "hebrewNikkud": "עֵץ",
+      "transliteration": "ets",
+      "english": "Tree",
+      "emoji": "🌳",
+      "category": "nature",
+      "cardUidP1": null,
+      "cardUidP2": null
+    },
+    {
+      "id": "star",
+      "hebrew": "כוכב",
+      "hebrewNikkud": "כּוֹכָב",
+      "transliteration": "kochav",
+      "english": "Star",
+      "emoji": "⭐",
+      "category": "nature",
+      "cardUidP1": null,
+      "cardUidP2": null
+    },
+    {
+      "id": "rain",
+      "hebrew": "גשם",
+      "hebrewNikkud": "גֶּשֶׁם",
+      "transliteration": "geshem",
+      "english": "Rain",
+      "emoji": "🌧️",
       "category": "nature",
       "cardUidP1": null,
       "cardUidP2": null

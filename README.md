@@ -52,18 +52,18 @@ http://localhost:3000/admin
 
 ## Word List
 
-The game includes 8 words across four categories:
+The game includes 27 words across four categories. Add or edit them in
+[`data/words.json`](data/words.json) — no code changes needed.
 
-| Hebrew | Nikkud | English | Category |
-|--------|--------|---------|----------|
-| כלב | כֶּלֶב | Dog | Animal |
-| חתול | חָתוּל | Cat | Animal |
-| דג | דָּג | Fish | Animal |
-| אדום | אָדֹם | Red | Color |
-| כחול | כָּחֹל | Blue | Color |
-| תפוח | תַּפּוּחַ | Apple | Food |
-| בננה | בָּנָנָה | Banana | Food |
-| פרח | פֶּרַח | Flower | Nature |
+| Category | Words |
+|----------|-------|
+| Animal | Dog, Cat, Fish, Bird, Horse, Cow, Lion, Elephant, Monkey |
+| Color | Red, Blue, Green, Yellow, Black, White |
+| Food | Apple, Banana, Bread, Milk, Egg, Grapes |
+| Nature | Flower, Sun, Moon, Tree, Star, Rain |
+
+Each word also stores its nikkud, transliteration, and an emoji (shown on the
+admin page and the round reveal).
 
 ---
 
