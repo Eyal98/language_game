@@ -52,15 +52,15 @@ http://localhost:3000/admin
 
 ## Word List
 
-The game includes 27 words across four categories. Add or edit them in
+The game includes 14 words across four categories. Add or edit them in
 [`data/words.json`](data/words.json) — no code changes needed.
 
 | Category | Words |
 |----------|-------|
-| Animal | Dog, Cat, Fish, Bird, Horse, Cow, Lion, Elephant, Monkey |
-| Color | Red, Blue, Green, Yellow, Black, White |
-| Food | Apple, Banana, Bread, Milk, Egg, Grapes |
-| Nature | Flower, Sun, Moon, Tree, Star, Rain |
+| Animal | Dog, Cat, Fish, Bird, Horse |
+| Color | Red, Blue, Green, Yellow |
+| Food | Apple, Banana, Bread |
+| Nature | Flower, Sun |
 
 Each word also stores its nikkud, transliteration, and an emoji (shown on the
 admin page and the round reveal).
