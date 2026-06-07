@@ -422,28 +422,86 @@ const server = http.createServer((req, res) => {
 
 // --- USB serial reader (no WiFi, no npm packages) ---
 //
-// When an Arduino is connected over USB it prints one card UID per line. On
-// Linux/macOS a serial device is just a file: we configure it once with `stty`
-// (baud + raw mode), then read it as a stream and write status back to it. This
-// uses only built-in modules, so no `npm install` is ever required.
+// When an Arduino is connected over USB it prints one card UID per line. We read
+// those lines and feed them through the same scan logic as the HTTP API, and
+// write "correct"/"wrong" back so the Arduino LEDs can light up. This uses only
+// tools that ship with the OS, so no `npm install` is ever required:
+//   - Windows:     Windows PowerShell's built-in .NET SerialPort (serial-bridge.ps1)
+//   - Linux/macOS: the serial device is a file; configure it with `stty`, then
+//                  read/write it as a stream.
 //
-// Enable by setting SERIAL_PORT (e.g. SERIAL_PORT=/dev/ttyACM0). If it isn't
-// set, the server still runs fully for web/curl play. Windows COM ports aren't
-// supported by this built-in reader — use the web/curl flow there, or pipe a
-// reader into POST /api/scan.
+// Enable by setting SERIAL_PORT (e.g. SERIAL_PORT=COM3 on Windows, or
+// SERIAL_PORT=/dev/ttyACM0 on Linux/macOS). If it isn't set, the server still
+// runs fully for web/curl play.
 function initSerial() {
   const portPath = process.env.SERIAL_PORT;
   if (!portPath) {
-    console.log('Serial reader disabled (set SERIAL_PORT=/dev/ttyACM0 to enable).');
+    const example = process.platform === 'win32' ? 'COM3' : '/dev/ttyACM0';
+    console.log(`Serial reader disabled (set SERIAL_PORT=${example} to enable).`);
     return;
   }
-  if (process.platform === 'win32') {
-    console.warn('SERIAL_PORT is set but the built-in serial reader does not support Windows COM ports.');
-    console.warn('Use the web/curl flow, or POST scans to /api/scan from your own reader script.');
-    return;
-  }
-
   const baud = Number(process.env.SERIAL_BAUD) || 115200;
+  if (process.platform === 'win32') {
+    initSerialWindows(portPath, baud);
+  } else {
+    initSerialUnix(portPath, baud);
+  }
+}
+
+// Run a scanned UID through the game and report the outcome. `writeBack(status)`
+// optionally sends "correct"/"wrong" to the Arduino for LED feedback.
+function handleSerialUid(uid, writeBack) {
+  const trimmed = uid.trim();
+  if (!trimmed) return;
+  const result = processScan(trimmed);
+  console.log(`[serial] ${trimmed} -> ${result.status}${result.player ? ' (' + result.player + ')' : ''}`);
+  if (writeBack && (result.status === 'correct' || result.status === 'wrong')) {
+    writeBack(result.status);
+  }
+}
+
+// Split a growing buffer into complete lines, returning the leftover remainder.
+function drainLines(buffer, onLine) {
+  let nl;
+  while ((nl = buffer.indexOf('\n')) >= 0) {
+    onLine(buffer.slice(0, nl));
+    buffer = buffer.slice(nl + 1);
+  }
+  return buffer;
+}
+
+// Windows: spawn a small PowerShell bridge that owns the COM port and pipes
+// UIDs to stdout / accepts status lines on stdin.
+function initSerialWindows(portName, baud) {
+  const { spawn } = require('child_process');
+  const script = path.join(__dirname, 'serial-bridge.ps1');
+  const child = spawn('powershell.exe', [
+    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script
+  ], { env: { ...process.env, SERIAL_PORT: portName, SERIAL_BAUD: String(baud) } });
+
+  let buffer = '';
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', (chunk) => {
+    buffer += chunk;
+    buffer = drainLines(buffer, (line) => handleSerialUid(line, (s) => child.stdin.write(`${s}\n`)));
+  });
+
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (d) => { const m = d.trim(); if (m) console.log(`[serial] ${m}`); });
+
+  child.on('error', (err) => {
+    console.warn(`Could not start PowerShell serial bridge: ${err.message}`);
+    console.warn('Is PowerShell available? The game still runs for web/curl play.');
+  });
+  child.on('close', (code) => {
+    console.warn(`Serial bridge exited (code ${code}), retrying in 3s...`);
+    setTimeout(initSerial, 3000);
+  });
+}
+
+// Linux/macOS: the serial device is a file. Configure it once with `stty`, then
+// read it as a stream and write status back to it.
+function initSerialUnix(portPath, baud) {
   const { execFileSync } = require('child_process');
 
   // Put the tty into raw mode at the right baud so we read clean lines.
@@ -468,22 +526,10 @@ function initSerial() {
   let buffer = '';
 
   stream.on('open', () => console.log(`Serial reader connected on ${portPath} @ ${baud}`));
-
   stream.on('data', (chunk) => {
     buffer += chunk;
-    let nl;
-    while ((nl = buffer.indexOf('\n')) >= 0) {
-      const uid = buffer.slice(0, nl).trim();
-      buffer = buffer.slice(nl + 1);
-      if (!uid) continue;
-      const result = processScan(uid);
-      console.log(`[serial] ${uid} -> ${result.status}${result.player ? ' (' + result.player + ')' : ''}`);
-      if (writeStream && (result.status === 'correct' || result.status === 'wrong')) {
-        writeStream.write(`${result.status}\n`);
-      }
-    }
+    buffer = drainLines(buffer, (line) => handleSerialUid(line, writeStream ? (s) => writeStream.write(`${s}\n`) : null));
   });
-
   stream.on('error', (err) => console.warn(`Serial error: ${err.message}`));
   stream.on('close', () => {
     console.warn('Serial port closed, retrying in 3s...');
