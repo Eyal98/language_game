@@ -1,6 +1,5 @@
 let words = [];
 let lastScannedUid = null;
-let ws;
 
 const grid = document.getElementById('words-grid');
 const lastScanEl = document.getElementById('last-scan-uid');
@@ -97,11 +96,10 @@ async function removeCard(wordId, slot) {
   render();
 }
 
-function connectWebSocket() {
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(`${protocol}//${location.host}`);
+function connectEvents() {
+  const es = new EventSource('/api/events');
 
-  ws.onmessage = (event) => {
+  es.onmessage = (event) => {
     const data = JSON.parse(event.data);
 
     if (data.event === 'cardScanned') {
@@ -126,8 +124,7 @@ function connectWebSocket() {
       render();
     }
   };
-
-  ws.onclose = () => setTimeout(connectWebSocket, 2000);
+  // EventSource reconnects automatically on error; nothing to do here.
 }
 
 async function init() {
@@ -141,7 +138,7 @@ async function init() {
     render();
   }
 
-  connectWebSocket();
+  connectEvents();
 }
 
 init();

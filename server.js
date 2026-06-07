@@ -1,23 +1,16 @@
-const express = require('express');
+// Zero-dependency server: only Node's built-in modules. No `npm install` needed.
+// - HTTP routing and static files are handled with the built-in `http` module.
+// - Server -> client push uses Server-Sent Events (SSE) instead of WebSockets.
+// - Client -> server actions are plain HTTP POSTs.
 const http = require('http');
-const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
 
-const app = express();
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
-
 const PORT = process.env.PORT || 3000;
+const PUBLIC_DIR = path.join(__dirname, 'public');
 const WORDS_PATH = path.join(__dirname, 'data', 'words.json');
 const ROUND_TIMEOUT_MS = 30000;
 const ROUND_DELAY_MS = 3000;
-// Cap on how many rounds a single game can run. Derived from the data when
-// possible, falling back to this value.
-const DEFAULT_MAX_ROUNDS = 8;
-
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
 
 // Load word data defensively — a malformed file shouldn't leave a half-started server.
 let wordsData;
@@ -80,13 +73,15 @@ function scheduleNextRound() {
   nextRoundTimer = setTimeout(startNewRound, ROUND_DELAY_MS);
 }
 
+// Connected SSE clients (the game screen + admin page). Each entry is the
+// ServerResponse of an open /api/events stream.
+const sseClients = new Set();
+
 function broadcast(data) {
-  const msg = JSON.stringify(data);
-  wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(msg);
-    }
-  });
+  const msg = `data: ${JSON.stringify(data)}\n\n`;
+  for (const res of sseClients) {
+    res.write(msg);
+  }
 }
 
 function shuffleArray(arr) {
@@ -176,48 +171,6 @@ function startGame() {
   return { ok: true };
 }
 
-// --- REST API ---
-
-app.get('/admin', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
-});
-
-app.get('/api/words', (req, res) => {
-  res.json(wordsData);
-});
-
-app.get('/api/status', (req, res) => {
-  res.json({
-    status: gameState.status,
-    scores: gameState.scores,
-    roundNumber: gameState.roundNumber,
-    totalRounds: gameState.totalRounds,
-    lastScannedUid: gameState.lastScannedUid
-  });
-});
-
-app.post('/api/game/start', (req, res) => {
-  const result = startGame();
-  if (result.error) return res.status(400).json(result);
-  res.json(result);
-});
-
-app.post('/api/game/skip', (req, res) => {
-  if (gameState.status !== 'playing') {
-    return res.status(400).json({ error: 'Game is not active' });
-  }
-  clearTimeout(roundTimer);
-  gameState.roundLocked = true;
-  gameState.status = 'roundEnd';
-  broadcast({
-    event: 'roundSkipped',
-    word: gameState.currentWord,
-    scores: gameState.scores
-  });
-  scheduleNextRound();
-  res.json({ ok: true });
-});
-
 // Shared scan handler used by both the HTTP endpoint and the USB serial reader.
 // Returns { status, player } describing the outcome.
 function processScan(rawUid) {
@@ -266,15 +219,6 @@ function processScan(rawUid) {
   return { status: 'wrong', player };
 }
 
-app.post('/api/scan', (req, res) => {
-  const { uid } = req.body;
-  if (typeof uid !== 'string' || !uid.trim()) {
-    return res.status(400).json({ error: 'Missing or invalid uid' });
-  }
-  const result = processScan(uid);
-  res.json(result);
-});
-
 // `slot` selects which player's card to set: 1 -> cardUidP1, 2 -> cardUidP2.
 function cardField(slot) {
   if (slot === 1 || slot === '1') return 'cardUidP1';
@@ -282,46 +226,9 @@ function cardField(slot) {
   return null;
 }
 
-app.post('/api/words/:id/card', (req, res) => {
-  const { uid, slot } = req.body;
-  if (typeof uid !== 'string' || !uid.trim()) {
-    return res.status(400).json({ error: 'Missing or invalid uid' });
-  }
-  const field = cardField(slot);
-  if (!field) {
-    return res.status(400).json({ error: 'Missing or invalid slot (must be 1 or 2)' });
-  }
-  const word = wordsData.words.find(w => w.id === req.params.id);
-  if (!word) return res.status(404).json({ error: 'Word not found' });
-
-  const normalizedUid = uid.trim().toUpperCase();
-
-  word[field] = normalizedUid;
-  saveWords();
-
-  broadcast({ event: 'cardRegistered', wordId: word.id, slot: field === 'cardUidP1' ? 1 : 2, uid: normalizedUid });
-  res.json({ ok: true, word });
-});
-
-app.delete('/api/words/:id/card', (req, res) => {
-  const field = cardField(req.query.slot);
-  if (!field) {
-    return res.status(400).json({ error: 'Missing or invalid slot (must be 1 or 2)' });
-  }
-  const word = wordsData.words.find(w => w.id === req.params.id);
-  if (!word) return res.status(404).json({ error: 'Word not found' });
-
-  word[field] = null;
-  saveWords();
-
-  broadcast({ event: 'cardUnregistered', wordId: word.id, slot: field === 'cardUidP1' ? 1 : 2 });
-  res.json({ ok: true });
-});
-
-// --- WebSocket ---
-
-wss.on('connection', (ws) => {
-  ws.send(JSON.stringify({
+// The snapshot a freshly-connected client needs to render the current screen.
+function connectedSnapshot() {
+  return {
     event: 'connected',
     status: gameState.status,
     scores: gameState.scores,
@@ -334,86 +241,254 @@ wss.on('connection', (ws) => {
       hebrewNikkud: gameState.currentWord.hebrewNikkud,
       category: gameState.currentWord.category
     } : null
-  }));
+  };
+}
 
-  ws.on('message', (raw) => {
-    let data;
-    try { data = JSON.parse(raw); } catch { return; }
+// --- HTTP helpers ---
 
-    if (data.event === 'startGame') {
-      const result = startGame();
-      if (result.error) {
-        ws.send(JSON.stringify({ event: 'startError', message: result.error }));
-      }
-    } else if (data.event === 'toggleNikkud') {
-      gameState.showNikkud = data.show;
-      broadcast({ event: 'nikkudChanged', show: data.show });
-    } else if (data.event === 'skipRound') {
-      if (gameState.status === 'playing') {
-        clearTimeout(roundTimer);
-        gameState.roundLocked = true;
-        gameState.status = 'roundEnd';
-        broadcast({
-          event: 'roundSkipped',
-          word: gameState.currentWord,
-          scores: gameState.scores
-        });
-        scheduleNextRound();
-      }
-    }
+function sendJson(res, status, obj) {
+  const body = JSON.stringify(obj);
+  res.writeHead(status, {
+    'Content-Type': 'application/json',
+    'Content-Length': Buffer.byteLength(body)
   });
-});
+  res.end(body);
+}
 
-// --- USB serial reader (no WiFi needed) ---
-//
-// When an Arduino is connected over USB, it prints one card UID per line. We
-// read those lines and feed them through the same scan logic as the HTTP API.
-// `serialport` is an OPTIONAL dependency: if it isn't installed, or no port is
-// configured, the server still runs fully for web/curl play. Enable by setting
-// SERIAL_PORT (e.g. SERIAL_PORT=/dev/ttyACM0 or COM3).
-function initSerial() {
-  const portPath = process.env.SERIAL_PORT;
-  if (!portPath) {
-    console.log('Serial reader disabled (set SERIAL_PORT=/dev/ttyACM0 or COM3 to enable).');
+// Read and JSON-parse a request body. Calls cb(err, obj).
+function readJsonBody(req, cb) {
+  let raw = '';
+  let tooBig = false;
+  req.on('data', (chunk) => {
+    raw += chunk;
+    if (raw.length > 1e6) { tooBig = true; req.destroy(); } // guard against floods
+  });
+  req.on('end', () => {
+    if (tooBig) return cb(new Error('Body too large'));
+    if (!raw) return cb(null, {});
+    try { cb(null, JSON.parse(raw)); } catch (e) { cb(e); }
+  });
+  req.on('error', (e) => cb(e));
+}
+
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon'
+};
+
+// Serve a file from public/, preventing path traversal outside that directory.
+function serveStatic(urlPath, res) {
+  const rel = urlPath === '/' ? '/index.html' : urlPath;
+  const filePath = path.normalize(path.join(PUBLIC_DIR, rel));
+  if (!filePath.startsWith(PUBLIC_DIR)) {
+    res.writeHead(403); res.end('Forbidden'); return;
+  }
+  fs.readFile(filePath, (err, content) => {
+    if (err) { res.writeHead(404); res.end('Not found'); return; }
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' });
+    res.end(content);
+  });
+}
+
+// --- Router ---
+
+const server = http.createServer((req, res) => {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const pathname = url.pathname;
+  const method = req.method;
+
+  // Server-Sent Events stream: server -> client push (replaces WebSocket).
+  if (pathname === '/api/events' && method === 'GET') {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive'
+    });
+    res.write('retry: 2000\n\n');
+    res.write(`data: ${JSON.stringify(connectedSnapshot())}\n\n`);
+    sseClients.add(res);
+    req.on('close', () => sseClients.delete(res));
     return;
   }
 
-  let SerialPort, ReadlineParser;
-  try {
-    ({ SerialPort } = require('serialport'));
-    ({ ReadlineParser } = require('@serialport/parser-readline'));
-  } catch (err) {
-    console.warn('SERIAL_PORT is set but "serialport" is not installed. Run: npm install serialport');
+  if (pathname === '/api/words' && method === 'GET') {
+    return sendJson(res, 200, wordsData);
+  }
+
+  if (pathname === '/api/status' && method === 'GET') {
+    return sendJson(res, 200, {
+      status: gameState.status,
+      scores: gameState.scores,
+      roundNumber: gameState.roundNumber,
+      totalRounds: gameState.totalRounds,
+      lastScannedUid: gameState.lastScannedUid
+    });
+  }
+
+  if (pathname === '/api/game/start' && method === 'POST') {
+    const result = startGame();
+    return sendJson(res, result.error ? 400 : 200, result);
+  }
+
+  if (pathname === '/api/game/skip' && method === 'POST') {
+    if (gameState.status !== 'playing') {
+      return sendJson(res, 400, { error: 'Game is not active' });
+    }
+    clearTimeout(roundTimer);
+    gameState.roundLocked = true;
+    gameState.status = 'roundEnd';
+    broadcast({ event: 'roundSkipped', word: gameState.currentWord, scores: gameState.scores });
+    scheduleNextRound();
+    return sendJson(res, 200, { ok: true });
+  }
+
+  // Toggle nikkud (replaces the WS 'toggleNikkud' message).
+  if (pathname === '/api/nikkud' && method === 'POST') {
+    return readJsonBody(req, (err, body) => {
+      if (err) return sendJson(res, 400, { error: 'Invalid JSON' });
+      gameState.showNikkud = !!body.show;
+      broadcast({ event: 'nikkudChanged', show: gameState.showNikkud });
+      sendJson(res, 200, { ok: true });
+    });
+  }
+
+  if (pathname === '/api/scan' && method === 'POST') {
+    return readJsonBody(req, (err, body) => {
+      if (err) return sendJson(res, 400, { error: 'Invalid JSON' });
+      const { uid } = body;
+      if (typeof uid !== 'string' || !uid.trim()) {
+        return sendJson(res, 400, { error: 'Missing or invalid uid' });
+      }
+      sendJson(res, 200, processScan(uid));
+    });
+  }
+
+  // /api/words/:id/card  (POST to assign, DELETE to clear)
+  const cardMatch = pathname.match(/^\/api\/words\/([^/]+)\/card$/);
+  if (cardMatch) {
+    const wordId = decodeURIComponent(cardMatch[1]);
+
+    if (method === 'POST') {
+      return readJsonBody(req, (err, body) => {
+        if (err) return sendJson(res, 400, { error: 'Invalid JSON' });
+        const { uid, slot } = body;
+        if (typeof uid !== 'string' || !uid.trim()) {
+          return sendJson(res, 400, { error: 'Missing or invalid uid' });
+        }
+        const field = cardField(slot);
+        if (!field) return sendJson(res, 400, { error: 'Missing or invalid slot (must be 1 or 2)' });
+        const word = wordsData.words.find(w => w.id === wordId);
+        if (!word) return sendJson(res, 404, { error: 'Word not found' });
+
+        word[field] = uid.trim().toUpperCase();
+        saveWords();
+        broadcast({ event: 'cardRegistered', wordId: word.id, slot: field === 'cardUidP1' ? 1 : 2, uid: word[field] });
+        sendJson(res, 200, { ok: true, word });
+      });
+    }
+
+    if (method === 'DELETE') {
+      const field = cardField(url.searchParams.get('slot'));
+      if (!field) return sendJson(res, 400, { error: 'Missing or invalid slot (must be 1 or 2)' });
+      const word = wordsData.words.find(w => w.id === wordId);
+      if (!word) return sendJson(res, 404, { error: 'Word not found' });
+
+      word[field] = null;
+      saveWords();
+      broadcast({ event: 'cardUnregistered', wordId: word.id, slot: field === 'cardUidP1' ? 1 : 2 });
+      return sendJson(res, 200, { ok: true });
+    }
+  }
+
+  // /admin convenience route -> admin.html
+  if (pathname === '/admin' && method === 'GET') {
+    return serveStatic('/admin.html', res);
+  }
+
+  // Static files (GET/HEAD only).
+  if (method === 'GET' || method === 'HEAD') {
+    return serveStatic(pathname, res);
+  }
+
+  res.writeHead(404);
+  res.end('Not found');
+});
+
+// --- USB serial reader (no WiFi, no npm packages) ---
+//
+// When an Arduino is connected over USB it prints one card UID per line. On
+// Linux/macOS a serial device is just a file: we configure it once with `stty`
+// (baud + raw mode), then read it as a stream and write status back to it. This
+// uses only built-in modules, so no `npm install` is ever required.
+//
+// Enable by setting SERIAL_PORT (e.g. SERIAL_PORT=/dev/ttyACM0). If it isn't
+// set, the server still runs fully for web/curl play. Windows COM ports aren't
+// supported by this built-in reader — use the web/curl flow there, or pipe a
+// reader into POST /api/scan.
+function initSerial() {
+  const portPath = process.env.SERIAL_PORT;
+  if (!portPath) {
+    console.log('Serial reader disabled (set SERIAL_PORT=/dev/ttyACM0 to enable).');
+    return;
+  }
+  if (process.platform === 'win32') {
+    console.warn('SERIAL_PORT is set but the built-in serial reader does not support Windows COM ports.');
+    console.warn('Use the web/curl flow, or POST scans to /api/scan from your own reader script.');
     return;
   }
 
   const baud = Number(process.env.SERIAL_BAUD) || 115200;
+  const { execFileSync } = require('child_process');
 
-  function open() {
-    const port = new SerialPort({ path: portPath, baudRate: baud });
-    const parser = port.pipe(new ReadlineParser({ delimiter: '\n' }));
-
-    port.on('open', () => console.log(`Serial reader connected on ${portPath} @ ${baud}`));
-
-    parser.on('data', (line) => {
-      const uid = line.trim();
-      if (!uid) return;
-      const result = processScan(uid);
-      console.log(`[serial] ${uid} -> ${result.status}${result.player ? ' (' + result.player + ')' : ''}`);
-      // Send the outcome back so the Arduino LEDs can show correct/wrong.
-      if (result.status === 'correct' || result.status === 'wrong') {
-        port.write(`${result.status}\n`);
-      }
-    });
-
-    port.on('error', (err) => console.warn(`Serial error: ${err.message}`));
-    port.on('close', () => {
-      console.warn('Serial port closed, retrying in 3s...');
-      setTimeout(open, 3000);
-    });
+  // Put the tty into raw mode at the right baud so we read clean lines.
+  try {
+    execFileSync('stty', ['-F', portPath, String(baud), 'raw', '-echo']);
+  } catch (err) {
+    console.warn(`Could not configure ${portPath} with stty: ${err.message}`);
+    console.warn('Is the Arduino plugged in and is SERIAL_PORT correct? Serial disabled.');
+    return;
   }
 
-  open();
+  let writeStream = null;
+  try {
+    // Separate write handle so we can send "correct"/"wrong" back for the LEDs.
+    writeStream = fs.createWriteStream(portPath);
+    writeStream.on('error', (e) => console.warn(`Serial write error: ${e.message}`));
+  } catch (err) {
+    console.warn(`Could not open ${portPath} for writing: ${err.message} (LED feedback disabled)`);
+  }
+
+  const stream = fs.createReadStream(portPath, { encoding: 'utf8' });
+  let buffer = '';
+
+  stream.on('open', () => console.log(`Serial reader connected on ${portPath} @ ${baud}`));
+
+  stream.on('data', (chunk) => {
+    buffer += chunk;
+    let nl;
+    while ((nl = buffer.indexOf('\n')) >= 0) {
+      const uid = buffer.slice(0, nl).trim();
+      buffer = buffer.slice(nl + 1);
+      if (!uid) continue;
+      const result = processScan(uid);
+      console.log(`[serial] ${uid} -> ${result.status}${result.player ? ' (' + result.player + ')' : ''}`);
+      if (writeStream && (result.status === 'correct' || result.status === 'wrong')) {
+        writeStream.write(`${result.status}\n`);
+      }
+    }
+  });
+
+  stream.on('error', (err) => console.warn(`Serial error: ${err.message}`));
+  stream.on('close', () => {
+    console.warn('Serial port closed, retrying in 3s...');
+    setTimeout(initSerial, 3000);
+  });
 }
 
 server.listen(PORT, () => {

@@ -29,7 +29,6 @@ const els = {
   trophy: document.getElementById('trophy')
 };
 
-let ws;
 let showNikkud = true;
 let currentWord = null;
 let audioCtx;
@@ -197,26 +196,38 @@ function highlightWinner(player) {
 
 // ===== WebSocket =====
 
-function connectWebSocket() {
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(`${protocol}//${location.host}`);
-
-  ws.onopen = () => console.log('Connected to server');
-
-  ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    handleEvent(data);
-  };
-
-  ws.onclose = () => {
-    console.log('Disconnected, reconnecting...');
-    setTimeout(connectWebSocket, 2000);
-  };
+// Server -> client push via Server-Sent Events (EventSource auto-reconnects).
+function connectEvents() {
+  const es = new EventSource('/api/events');
+  es.onopen = () => console.log('Connected to server');
+  es.onmessage = (event) => handleEvent(JSON.parse(event.data));
+  es.onerror = () => console.log('Disconnected, reconnecting...');
 }
 
-function sendEvent(event, payload = {}) {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ event, ...payload }));
+// Client -> server actions are plain HTTP POSTs. Each event maps to a route.
+const ACTION_ROUTES = {
+  startGame: '/api/game/start',
+  skipRound: '/api/game/skip',
+  toggleNikkud: '/api/nikkud'
+};
+
+async function sendEvent(event, payload = {}) {
+  const url = ACTION_ROUTES[event];
+  if (!url) return;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    // startGame returns an error here when no words are ready; surface it like
+    // the old WebSocket 'startError' event did.
+    if (event === 'startGame') {
+      const data = await res.json().catch(() => ({}));
+      if (data && data.error) showStartError(data.error);
+    }
+  } catch (err) {
+    console.warn('Action failed:', event, err);
   }
 }
 
@@ -357,5 +368,5 @@ els.nikkudGame.addEventListener('change', handleNikkudToggle);
 // ===== Init =====
 
 document.fonts.ready.then(() => {
-  connectWebSocket();
+  connectEvents();
 });
