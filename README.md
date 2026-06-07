@@ -26,7 +26,6 @@ A two-player Hebrew vocabulary **race** game using RFID cards — on a single re
 - Arduino Uno or Leonardo, connected to the PC over **USB** (no WiFi module needed)
 - 1× MFRC522 RFID reader module (shared by both players)
 - Two RFID cards/fobs per word you want to play (one per player), 13.56 MHz / MIFARE
-- 2 LEDs (green + red) + 220Ω resistors (optional, for scan feedback)
 
 ---
 
@@ -125,9 +124,6 @@ Pin 10 ───── SDA  (Reader)
 Pin  9 ───── RST  (Reader)
 3.3V   ───── VCC  (Reader) ⚠️ NOT 5V!
 GND    ───── GND  (Reader)
-
-Pin  6 ───── Green LED (correct scan) + 220Ω to GND
-Pin  7 ───── Red LED   (wrong scan)   + 220Ω to GND
 ```
 
 ### Arduino Libraries
@@ -137,8 +133,9 @@ Install via **Arduino IDE → Sketch → Include Library → Manage Libraries**:
 
 ### Upload
 
-Upload `arduino/rfid_reader.ino`. The green LED blinks twice when the reader is
-ready. The sketch uses serial at **115200 baud** (matching the server default).
+Upload `arduino/rfid_reader.ino`. The sketch uses serial at **115200 baud**
+(matching the server default). Open the Arduino IDE Serial Monitor at 115200 to
+confirm a UID line prints each time you scan a card.
 
 ### Connect the server to the reader
 

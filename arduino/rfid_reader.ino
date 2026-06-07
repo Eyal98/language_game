@@ -6,9 +6,6 @@
  * same reader. This sketch just reports each scanned UID over USB serial; the
  * Node server (with SERIAL_PORT set) reads the line and runs the game.
  *
- * The server may write a one-word status back ("correct"/"wrong") so the LEDs
- * give feedback. Feedback is optional — the game works without it.
- *
  * Hardware:
  *   - Arduino Uno/Leonardo connected to the PC over USB
  *   - 1x MFRC522 RFID reader
@@ -16,7 +13,6 @@
  * Wiring:
  *   Reader SPI: SCK=13, MOSI=11, MISO=12
  *   Reader:     SDA=10, RST=9
- *   LED Green=6 (correct), LED Red=7 (wrong)
  */
 
 #include <SPI.h>
@@ -25,9 +21,6 @@
 // ===== PINS =====
 #define SS_PIN      10    // Reader SS
 #define RST_PIN     9     // Reader RST
-
-#define LED_GREEN   6
-#define LED_RED     7
 
 // ===== DEBOUNCE =====
 #define DEBOUNCE_MS  2000
@@ -43,19 +36,12 @@ unsigned long lastScanTime = 0;
 void setup() {
   Serial.begin(SERIAL_BAUD);
 
-  pinMode(LED_GREEN, OUTPUT);
-  pinMode(LED_RED,   OUTPUT);
-
   SPI.begin();
   reader.PCD_Init();
-
-  // Ready blink so you can see the reader is alive.
-  blinkLed(LED_GREEN, 2);
 }
 
 void loop() {
   checkReader();
-  checkFeedback();
 }
 
 void checkReader() {
@@ -82,19 +68,6 @@ void checkReader() {
   reader.PCD_StopCrypto1();
 }
 
-// Optional: the server may send back a status line ("correct"/"wrong"/...) to
-// drive the LEDs. Ignored if nothing is sent.
-void checkFeedback() {
-  if (!Serial.available()) return;
-  String status = Serial.readStringUntil('\n');
-  status.trim();
-  if (status == "correct") {
-    blinkLed(LED_GREEN, 2);
-  } else if (status == "wrong") {
-    blinkLed(LED_RED, 1);
-  }
-}
-
 String getUidString(MFRC522 &reader) {
   String uid = "";
   for (byte i = 0; i < reader.uid.size; i++) {
@@ -104,13 +77,4 @@ String getUidString(MFRC522 &reader) {
   }
   uid.toUpperCase();
   return uid;
-}
-
-void blinkLed(int pin, int times) {
-  for (int i = 0; i < times; i++) {
-    digitalWrite(pin, HIGH);
-    delay(150);
-    digitalWrite(pin, LOW);
-    delay(150);
-  }
 }
