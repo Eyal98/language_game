@@ -67,11 +67,25 @@ vowel marks), transliterations, and an emoji. During a round the Hebrew word
 shows first and is read aloud; about 2 seconds later the Arabic word appears
 below it and is read aloud too.
 
-> **Read-aloud** uses the browser's built-in speech synthesis. It works offline,
-> but a word is only spoken if the device has a voice for that language
-> installed (Hebrew `he`, Arabic `ar`). With no matching voice the text still
-> shows; it just isn't spoken. Most phones/tablets can add language voices in
-> their system settings.
+### Read-aloud
+
+Read-aloud uses the browser's built-in speech synthesis. It works offline, but a
+word is only spoken if the device has a **voice** for that language installed —
+and on Windows, Hebrew and Arabic voices are **not installed by default**. With
+no matching voice the text still shows; it just isn't spoken. The welcome screen
+shows a 🔇 hint when a needed voice is missing.
+
+**To install Hebrew and Arabic voices on Windows 10/11:**
+
+1. Open **Settings → Time & Language → Speech**
+2. Under **Manage voices**, click **Add voices**
+3. Search for and add **עברית (Hebrew)** and **العربية (Arabic)**
+4. Wait for the voices to finish downloading
+5. **Fully close and reopen the browser** (all windows) so it picks up the new voices
+
+This installs Microsoft voices such as *Asaf* (Hebrew) and *Naayf/Hoda*
+(Arabic). If Chrome stays silent after this, try Microsoft Edge — it exposes
+more of the Windows voices.
 
 ---
 
@@ -246,6 +260,15 @@ taskkill /PID <PID> /F
 **Game won't start**
 - Each playable word needs **both** the Player 1 and Player 2 cards assigned
 - If no word is fully assigned, the welcome screen shows an error explaining why
+
+**Can't hear the words**
+- The most common cause: no Hebrew/Arabic **voice** is installed on the device —
+  see [Read-aloud](#read-aloud) for the Windows install steps. The welcome
+  screen shows a 🔇 hint when a voice is missing.
+- Speech starts only after the first click on the page (clicking **Start Game**
+  counts), per browser autoplay rules
+- Check the device/browser tab isn't muted, and press F12 → Console: the game
+  logs which voices it found and which languages are missing
 
 ---
 

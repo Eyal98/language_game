@@ -8,6 +8,7 @@ const els = {
   btnStart: document.getElementById('btn-start'),
   btnPlayAgain: document.getElementById('btn-play-again'),
   welcomeError: document.getElementById('welcome-error'),
+  voiceHint: document.getElementById('voice-hint'),
   nikkudWelcome: document.getElementById('nikkud-toggle-welcome'),
   nikkudGame: document.getElementById('nikkud-toggle-game'),
   roundNumber: document.getElementById('round-number'),
@@ -35,6 +36,7 @@ let currentWord = null;
 let audioCtx;
 let timerWarningTimeout;
 let arabicRevealTimeout;        // delay before the Arabic word appears
+let speakDelayTimeout;          // small gap between cancel() and speak() (Chrome quirk)
 const ARABIC_DELAY_MS = 2000;   // show/speak Arabic this long after the Hebrew
 
 // ===== Sound Effects =====
@@ -86,30 +88,69 @@ function playTick() {
 
 // ===== Speech (read the word aloud) =====
 // Uses the browser's built-in speech synthesis. Works offline, but only speaks
-// if the device has a voice for that language installed; otherwise it's a no-op.
+// if the device has a voice for that language installed. On Windows, Hebrew and
+// Arabic voices are NOT installed by default — see the README ("Read-aloud").
+// When a voice is missing, a hint is shown on the welcome screen.
 
-function pickVoice(langPrefix) {
-  if (!('speechSynthesis' in window)) return null;
-  const voices = window.speechSynthesis.getVoices();
-  return voices.find(v => v.lang && v.lang.toLowerCase().startsWith(langPrefix)) || null;
+// Some platforms report Hebrew with the legacy 'iw' code instead of 'he'.
+const HEBREW_PREFIXES = ['he', 'iw'];
+const ARABIC_PREFIXES = ['ar'];
+
+let voiceList = [];
+
+function refreshVoices() {
+  if (!('speechSynthesis' in window)) return;
+  voiceList = window.speechSynthesis.getVoices();
+  updateVoiceHint();
 }
 
-function speak(text, langPrefix, fullLang) {
+function pickVoice(langPrefixes) {
+  return voiceList.find(v =>
+    v.lang && langPrefixes.some(p => v.lang.toLowerCase().startsWith(p))
+  ) || null;
+}
+
+// Tell the user when read-aloud can't work, instead of failing silently.
+function updateVoiceHint() {
+  if (!els.voiceHint) return;
+  if (!('speechSynthesis' in window)) {
+    els.voiceHint.textContent = '🔇 This browser does not support speech — words will not be read aloud.';
+    return;
+  }
+  if (!voiceList.length) return; // voices not loaded yet; checked again on voiceschanged
+  const missing = [];
+  if (!pickVoice(HEBREW_PREFIXES)) missing.push('Hebrew');
+  if (!pickVoice(ARABIC_PREFIXES)) missing.push('Arabic');
+  if (missing.length) {
+    els.voiceHint.textContent = `🔇 No ${missing.join(' or ')} voice installed on this device — those words won't be read aloud. See the README ("Read-aloud") for how to add voices.`;
+    console.warn('Missing speech voices for:', missing.join(', '),
+      '\nInstalled voices:', voiceList.map(v => `${v.name} (${v.lang})`).join(', ') || '(none)');
+  } else {
+    els.voiceHint.textContent = '';
+  }
+}
+
+function speak(text, langPrefixes, fallbackLang) {
   if (!text || !('speechSynthesis' in window)) return;
+  const synth = window.speechSynthesis;
   const utter = new SpeechSynthesisUtterance(text);
-  const voice = pickVoice(langPrefix);
+  const voice = pickVoice(langPrefixes);
   if (voice) utter.voice = voice;
-  utter.lang = voice ? voice.lang : fullLang; // hint the language even without a matched voice
-  utter.rate = 0.85;                          // a touch slow, for learners
-  try { window.speechSynthesis.speak(utter); } catch (e) { /* ignore */ }
+  utter.lang = voice ? voice.lang : fallbackLang; // hint the language even without a matched voice
+  utter.rate = 0.85;                              // a touch slow, for learners
+  // Chrome can leave the engine stuck in a paused state; resume() unsticks it.
+  try {
+    synth.resume();
+    synth.speak(utter);
+  } catch (e) { /* ignore */ }
 }
 
 function speakHebrew(word) {
-  speak(word.hebrew, 'he', 'he-IL');
+  speak(word.hebrew, HEBREW_PREFIXES, 'he-IL');
 }
 
 function speakArabic(word) {
-  speak(word.arabic, 'ar', 'ar-SA');
+  speak(word.arabic, ARABIC_PREFIXES, 'ar-SA');
 }
 
 // ===== Screen Management =====
@@ -192,8 +233,11 @@ function updateWord(word, withSpeech = false) {
     els.wordDisplay.style.animation = 'wordAppear 0.5s ease';
   });
   if (withSpeech) {
+    // Stop any leftover speech from the previous round. Chrome silently drops
+    // an utterance queued immediately after cancel(), so speak after a beat.
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    speakHebrew(word);
+    clearTimeout(speakDelayTimeout);
+    speakDelayTimeout = setTimeout(() => speakHebrew(word), 150);
   }
 
   // If the Arabic is already visible (e.g. nikkud toggled mid-round), keep it in
@@ -437,10 +481,13 @@ els.nikkudGame.addEventListener('change', handleNikkudToggle);
 
 // ===== Init =====
 
-// Warm up the speech voice list — getVoices() is often empty until this fires.
+// Load the speech voice list — getVoices() is often empty until voiceschanged
+// fires. Also checks for missing Hebrew/Arabic voices and shows a hint.
 if ('speechSynthesis' in window) {
-  window.speechSynthesis.getVoices();
-  window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+  refreshVoices();
+  window.speechSynthesis.onvoiceschanged = refreshVoices;
+} else {
+  updateVoiceHint();
 }
 
 document.fonts.ready.then(() => {

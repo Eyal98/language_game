@@ -148,6 +148,20 @@ body {
   margin-top: 2rem;
 }
 
+/* Shown on the welcome screen when read-aloud voices are missing. */
+.voice-hint {
+  margin-top: 1.2rem;
+  font-size: 1rem;
+  color: #8a6d1a;
+  max-width: 540px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.voice-hint:empty {
+  display: none;
+}
+
 .nikkud-toggle-container.small {
   margin-top: 0;
 }
