@@ -11,8 +11,8 @@
       "english": "Dog",
       "emoji": "🐶",
       "category": "animal",
-      "cardUidP1": "AA BB CC 01",
-      "cardUidP2": "AA BB CC 02"
+      "cardUidP1": "E0 ED C9 A3",
+      "cardUidP2": "30 8C C3 A3"
     },
     {
       "id": "cat",
@@ -25,8 +25,8 @@
       "english": "Cat",
       "emoji": "🐱",
       "category": "animal",
-      "cardUidP1": "AA BB CC 03",
-      "cardUidP2": "AA BB CC 04"
+      "cardUidP1": "26 BE EF 2B",
+      "cardUidP2": "0F E2 1E 39"
     },
     {
       "id": "fish",
@@ -39,8 +39,8 @@
       "english": "Fish",
       "emoji": "🐟",
       "category": "animal",
-      "cardUidP1": null,
-      "cardUidP2": null
+      "cardUidP1": "A0 37 C0 A3",
+      "cardUidP2": "80 F3 CA A3"
     },
     {
       "id": "bird",
@@ -81,8 +81,8 @@
       "english": "Red",
       "emoji": "🔴",
       "category": "color",
-      "cardUidP1": null,
-      "cardUidP2": null
+      "cardUidP1": "E8 81 1E 39",
+      "cardUidP2": "20 C1 08 A3"
     },
     {
       "id": "blue",
@@ -95,8 +95,8 @@
       "english": "Blue",
       "emoji": "🔵",
       "category": "color",
-      "cardUidP1": null,
-      "cardUidP2": null
+      "cardUidP1": "96 5D 1F 39",
+      "cardUidP2": "90 CD 0A A3"
     },
     {
       "id": "green",
@@ -137,8 +137,8 @@
       "english": "Apple",
       "emoji": "🍎",
       "category": "food",
-      "cardUidP1": null,
-      "cardUidP2": null
+      "cardUidP1": "00 BF 0A A3",
+      "cardUidP2": "80 FE 09 A3"
     },
     {
       "id": "banana",
@@ -151,8 +151,8 @@
       "english": "Banana",
       "emoji": "🍌",
       "category": "food",
-      "cardUidP1": null,
-      "cardUidP2": null
+      "cardUidP1": "90 12 0F A3",
+      "cardUidP2": "D0 21 08 A3"
     },
     {
       "id": "bread",
