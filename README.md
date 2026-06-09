@@ -23,9 +23,12 @@ A two-player Hebrew vocabulary **race** game using RFID cards — on a single re
 - [Node.js](https://nodejs.org) (v16 or later) — that's it, no other packages
 
 ### Hardware (optional — game works without it for testing)
-- Arduino Uno or Leonardo, connected to the PC over **USB** (no WiFi module needed)
 - 1× MFRC522 RFID reader module (shared by both players)
 - Two RFID cards/fobs per word you want to play (one per player), 13.56 MHz / MIFARE
+- **Wired option:** one Arduino (Uno or Leonardo) connected to the PC over USB
+- **Wireless option:** an Arduino Uno with the reader + a 433MHz RF transmitter
+  (e.g. FS1000A), and an Arduino Leonardo at the PC with a 433MHz RF receiver
+  (e.g. XY-MK-5V) — no WiFi needed either way
 
 ---
 
@@ -128,13 +131,14 @@ curl -X POST http://localhost:3000/api/game/skip
 
 ---
 
-## Arduino Setup (USB — no WiFi)
+## Arduino Setup (no WiFi)
 
-The Arduino connects to the PC over USB and prints each scanned card UID, one
-per line, over the serial port. The Node server reads that port and runs the
-game. No WiFi module is required.
+Two hardware options. Both speak the same protocol — one UID per line over USB
+serial — so the server works identically with either.
 
-### Wiring (single shared reader)
+### Option A — Wired: one Arduino at the PC
+
+The Arduino connects to the PC over USB and prints each scanned card UID.
 
 ```
 Arduino Uno
@@ -148,16 +152,56 @@ Pin  9 ───── RST  (Reader)
 GND    ───── GND  (Reader)
 ```
 
-### Arduino Libraries
+Library: `MFRC522` by GithubCommunity. Upload `arduino/rfid_reader.ino`. The
+sketch uses serial at **115200 baud** (matching the server default). Open the
+Serial Monitor at 115200 to confirm a UID line prints on each scan.
 
-Install via **Arduino IDE → Sketch → Include Library → Manage Libraries**:
-- `MFRC522` by GithubCommunity
+### Option B — Wireless: Uno scanner + RF link + Leonardo at the PC
 
-### Upload
+The **Uno** sits with the RFID scanner anywhere in the room (powered by a
+battery / power bank) and transmits each scan over a cheap **433MHz RF link**.
+The **Leonardo** plugs into the PC over USB with the RF receiver and forwards
+the UIDs to the server.
 
-Upload `arduino/rfid_reader.ino`. The sketch uses serial at **115200 baud**
-(matching the server default). Open the Arduino IDE Serial Monitor at 115200 to
-confirm a UID line prints each time you scan a card.
+```
+[card] → Uno + reader + RF transmitter  ~~433MHz~~>  RF receiver + Leonardo → USB → server
+```
+
+**Uno (transmitter side)** — upload `arduino/uno_rfid_transmitter/`:
+```
+Arduino Uno
+───────────────────────────────────────────────
+Pin 13 ───── SCK  (Reader)
+Pin 12 ───── MISO (Reader)
+Pin 11 ───── MOSI (Reader)
+Pin 10 ───── SDA  (Reader)
+Pin  9 ───── RST  (Reader)
+3.3V   ───── VCC  (Reader) ⚠️ NOT 5V!
+GND    ───── GND  (Reader)
+
+Pin  3 ───── DATA (RF transmitter, e.g. FS1000A)
+5V     ───── VCC  (RF transmitter)
+GND    ───── GND  (RF transmitter)
+```
+
+**Leonardo (receiver side, USB to the PC)** — upload `arduino/leonardo_rf_receiver/`:
+```
+Arduino Leonardo
+───────────────────────────────────────────────
+Pin 11 ───── DATA (RF receiver, e.g. XY-MK-5V)
+5V     ───── VCC  (RF receiver)
+GND    ───── GND  (RF receiver)
+```
+
+Libraries: `MFRC522` by GithubCommunity (Uno only) and `RadioHead` by Mike
+McCauley (both boards). Notes:
+
+- Solder a **~17 cm wire antenna** to both RF modules — without it the range is
+  under a meter; with it, comfortably across a room.
+- The RF link includes a CRC (RadioHead), so corrupted packets are dropped, and
+  each UID is sent twice with the receiver de-duplicating repeats.
+- Set `SERIAL_PORT` to the **Leonardo's** COM port (the Uno doesn't connect to
+  the PC at all).
 
 ### Connect the server to the reader
 
@@ -226,7 +270,9 @@ The Nikkud toggle (vowel marks) on the welcome screen and during gameplay shows/
 │   ├── admin.html     # Card registration page
 │   └── admin.js       # Admin logic
 └── arduino/
-    └── rfid_reader.ino  # Arduino sketch
+    ├── rfid_reader.ino           # Option A: wired reader at the PC
+    ├── uno_rfid_transmitter/     # Option B: Uno + reader + 433MHz RF transmitter
+    └── leonardo_rf_receiver/     # Option B: Leonardo + RF receiver at the PC
 ```
 
 ---
@@ -260,6 +306,14 @@ taskkill /PID <PID> /F
 **Game won't start**
 - Each playable word needs **both** the Player 1 and Player 2 cards assigned
 - If no word is fully assigned, the welcome screen shows an error explaining why
+
+**Wireless (RF) scans don't arrive**
+- Set `SERIAL_PORT` to the **Leonardo's** COM port, not the Uno's
+- Both RF modules need a ~17 cm wire antenna for usable range
+- Power the Uno well (weak batteries shrink RF range); the transmitter runs on 5V
+- Open the Serial Monitor on the Uno (115200): it prints `Sent: <UID>` per scan —
+  if that works but nothing arrives, the issue is the RF link or receiver wiring
+- The RF speed (2000 bps) must match between the two sketches
 
 **Can't hear the words**
 - The most common cause: no Hebrew/Arabic **voice** is installed on the device —
