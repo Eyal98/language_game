@@ -87,16 +87,21 @@ function playTick() {
 }
 
 // ===== Speech (read the word aloud) =====
-// Uses the browser's built-in speech synthesis. Works offline, but only speaks
-// if the device has a voice for that language installed. On Windows, Hebrew and
-// Arabic voices are NOT installed by default — see the README ("Read-aloud").
-// When a voice is missing, a hint is shown on the welcome screen.
+// Two sources, tried in order:
+//   1. Pre-recorded MP3 in public/audio/<id>_<he|ar>.mp3 (generated offline by
+//      tools/generate-audio.mjs). Works in any browser with no voices installed.
+//   2. The browser's built-in speech synthesis, if a voice for that language
+//      exists (on Windows, Hebrew/Arabic voices are usually NOT installed).
+// audio/manifest.json lists which recordings exist so we know which words are
+// covered and whether to warn the user.
 
 // Some platforms report Hebrew with the legacy 'iw' code instead of 'he'.
 const HEBREW_PREFIXES = ['he', 'iw'];
 const ARABIC_PREFIXES = ['ar'];
 
 let voiceList = [];
+let audioManifest = { he: [], ar: [] }; // word ids that have recorded clips
+const audioCache = {};                  // url -> HTMLAudioElement
 
 function refreshVoices() {
   if (!('speechSynthesis' in window)) return;
@@ -110,47 +115,83 @@ function pickVoice(langPrefixes) {
   ) || null;
 }
 
-// Tell the user when read-aloud can't work, instead of failing silently.
+// Load the list of available recordings (if any were generated).
+async function loadAudioManifest() {
+  try {
+    const res = await fetch('audio/manifest.json', { cache: 'no-store' });
+    if (res.ok) {
+      const m = await res.json();
+      audioManifest = { he: m.he || [], ar: m.ar || [] };
+    }
+  } catch (e) { /* no recordings bundled — fall back to synthesis */ }
+  updateVoiceHint();
+}
+
+function hasRecording(wordId, lang) {
+  return (audioManifest[lang] || []).includes(wordId);
+}
+
+// Warn only when a language can't be spoken at all: no recordings AND no voice.
 function updateVoiceHint() {
   if (!els.voiceHint) return;
-  if (!('speechSynthesis' in window)) {
-    els.voiceHint.textContent = '🔇 This browser does not support speech — words will not be read aloud.';
-    return;
-  }
-  if (!voiceList.length) return; // voices not loaded yet; checked again on voiceschanged
+  const cantSpeak = (recIds, prefixes) =>
+    recIds.length === 0 && !( 'speechSynthesis' in window && pickVoice(prefixes));
+
   const missing = [];
-  if (!pickVoice(HEBREW_PREFIXES)) missing.push('Hebrew');
-  if (!pickVoice(ARABIC_PREFIXES)) missing.push('Arabic');
+  if (cantSpeak(audioManifest.he, HEBREW_PREFIXES)) missing.push('Hebrew');
+  if (cantSpeak(audioManifest.ar, ARABIC_PREFIXES)) missing.push('Arabic');
+
   if (missing.length) {
-    els.voiceHint.textContent = `🔇 No ${missing.join(' or ')} voice installed on this device — those words won't be read aloud. See the README ("Read-aloud") for how to add voices.`;
-    console.warn('Missing speech voices for:', missing.join(', '),
-      '\nInstalled voices:', voiceList.map(v => `${v.name} (${v.lang})`).join(', ') || '(none)');
+    els.voiceHint.textContent = `🔇 No ${missing.join(' or ')} audio on this device. Either install a ${missing.join('/')} voice, or bundle recordings (see README "Read-aloud").`;
   } else {
     els.voiceHint.textContent = '';
   }
 }
 
-function speak(text, langPrefixes, fallbackLang) {
+// Speak via synthesis (fallback when no recording exists for this word).
+function speakSynth(text, langPrefixes, fallbackLang) {
   if (!text || !('speechSynthesis' in window)) return;
   const synth = window.speechSynthesis;
-  const utter = new SpeechSynthesisUtterance(text);
   const voice = pickVoice(langPrefixes);
-  if (voice) utter.voice = voice;
-  utter.lang = voice ? voice.lang : fallbackLang; // hint the language even without a matched voice
-  utter.rate = 0.85;                              // a touch slow, for learners
-  // Chrome can leave the engine stuck in a paused state; resume() unsticks it.
+  if (!voice) return; // no voice for this language — nothing usable to say
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.voice = voice;
+  utter.lang = voice.lang;
+  utter.rate = 0.85; // a touch slow, for learners
   try {
-    synth.resume();
+    synth.resume(); // Chrome can leave the engine stuck in a paused state
     synth.speak(utter);
   } catch (e) { /* ignore */ }
 }
 
+// Play a word in one language: recorded clip first, else synthesis.
+function playWord(word, lang, langPrefixes, fallbackLang, text) {
+  if (hasRecording(word.id, lang)) {
+    const url = `audio/${word.id}_${lang}.mp3`;
+    let audio = audioCache[url];
+    if (!audio) { audio = new Audio(url); audioCache[url] = audio; }
+    audio.currentTime = 0;
+    audio.play().catch(() => speakSynth(text, langPrefixes, fallbackLang));
+  } else {
+    speakSynth(text, langPrefixes, fallbackLang);
+  }
+}
+
 function speakHebrew(word) {
-  speak(word.hebrew, HEBREW_PREFIXES, 'he-IL');
+  playWord(word, 'he', HEBREW_PREFIXES, 'he-IL', word.hebrew);
 }
 
 function speakArabic(word) {
-  speak(word.arabic, ARABIC_PREFIXES, 'ar-SA');
+  playWord(word, 'ar', ARABIC_PREFIXES, 'ar-SA', word.arabic);
+}
+
+// Stop whatever is currently playing/speaking (called when a new round starts).
+function stopSpeech() {
+  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  for (const url in audioCache) {
+    const a = audioCache[url];
+    if (!a.paused) { a.pause(); a.currentTime = 0; }
+  }
 }
 
 // ===== Screen Management =====
@@ -233,9 +274,9 @@ function updateWord(word, withSpeech = false) {
     els.wordDisplay.style.animation = 'wordAppear 0.5s ease';
   });
   if (withSpeech) {
-    // Stop any leftover speech from the previous round. Chrome silently drops
-    // an utterance queued immediately after cancel(), so speak after a beat.
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    // Stop any leftover audio from the previous round. Chrome silently drops a
+    // synthesis utterance queued immediately after cancel(), so speak after a beat.
+    stopSpeech();
     clearTimeout(speakDelayTimeout);
     speakDelayTimeout = setTimeout(() => speakHebrew(word), 150);
   }
@@ -481,8 +522,11 @@ els.nikkudGame.addEventListener('change', handleNikkudToggle);
 
 // ===== Init =====
 
+// Find out which recorded clips are bundled (preferred audio source).
+loadAudioManifest();
+
 // Load the speech voice list — getVoices() is often empty until voiceschanged
-// fires. Also checks for missing Hebrew/Arabic voices and shows a hint.
+// fires. Used as a fallback when a word has no recording.
 if ('speechSynthesis' in window) {
   refreshVoices();
   window.speechSynthesis.onvoiceschanged = refreshVoices;

@@ -72,23 +72,35 @@ below it and is read aloud too.
 
 ### Read-aloud
 
-Read-aloud uses the browser's built-in speech synthesis. It works offline, but a
-word is only spoken if the device has a **voice** for that language installed —
-and on Windows, Hebrew and Arabic voices are **not installed by default**. With
-no matching voice the text still shows; it just isn't spoken. The welcome screen
-shows a 🔇 hint when a needed voice is missing.
+Each word can be read aloud from two sources, tried in order:
 
-**To install Hebrew and Arabic voices on Windows 10/11:**
+1. **Pre-recorded MP3s** in `public/audio/` — the recommended way. They play in
+   **any browser, with no installed voices and no internet** on the game device.
+2. The browser's built-in **speech synthesis**, used only for words that have no
+   recording (and only if the OS has a voice for that language).
 
-1. Open **Settings → Time & Language → Speech**
-2. Under **Manage voices**, click **Add voices**
-3. Search for and add **עברית (Hebrew)** and **العربية (Arabic)**
-4. Wait for the voices to finish downloading
-5. **Fully close and reopen the browser** (all windows) so it picks up the new voices
+The welcome screen shows a 🔇 hint only when a language has *neither* recordings
+nor an installed voice. Use **`/speech-test.html`** to diagnose audio.
 
-This installs Microsoft voices such as *Asaf* (Hebrew) and *Naayf/Hoda*
-(Arabic). If Chrome stays silent after this, try Microsoft Edge — it exposes
-more of the Windows voices.
+#### Generate the recordings (one time)
+
+On any machine with **internet** (uses Node built-ins, nothing to install):
+
+```bash
+node tools/generate-audio.mjs
+```
+
+This creates `public/audio/<id>_he.mp3` and `<id>_ar.mp3` for every word and
+updates `public/audio/manifest.json`. Commit the `public/audio/` folder; after
+that the game speaks every word offline, on any device. Re-run it after adding
+or changing words (existing files are skipped — delete one to regenerate it).
+
+#### Alternative: install OS voices instead
+
+If you'd rather not bundle recordings, install Hebrew/Arabic voices on the
+device: **Settings → Time & Language → Speech → Add voices** → add **עברית** and
+**العربية**, then fully restart the browser. On Windows, **Microsoft Edge** sees
+these voices far more reliably than Chrome.
 
 ---
 
@@ -268,7 +280,11 @@ The Nikkud toggle (vowel marks) on the welcome screen and during gameplay shows/
 │   ├── style.css      # Styling
 │   ├── game.js        # Frontend game logic
 │   ├── admin.html     # Card registration page
-│   └── admin.js       # Admin logic
+│   ├── admin.js       # Admin logic
+│   ├── speech-test.html  # Audio diagnostic page
+│   └── audio/         # Pre-recorded word clips + manifest.json
+├── tools/
+│   └── generate-audio.mjs  # One-time recorder (run with internet)
 └── arduino/
     ├── rfid_reader.ino           # Option A: wired reader at the PC
     ├── uno_rfid_transmitter/     # Option B: Uno + reader + 433MHz RF transmitter
@@ -316,18 +332,16 @@ taskkill /PID <PID> /F
 - The RF speed (2000 bps) must match between the two sketches
 
 **Can't hear the words**
-- Open the built-in diagnostic page: **`http://localhost:3000/speech-test.html`**.
-  It plays a test beep, tries English/Hebrew/Arabic speech, and lists every
-  voice the browser can see — it tells you exactly what's missing.
-- The most common cause: no Hebrew/Arabic **voice** is installed on the device —
-  see [Read-aloud](#read-aloud) for the Windows install steps. The welcome
-  screen shows a 🔇 hint when a voice is missing.
-- **Chrome on Windows often can't see voices that Edge can** (voices added via
-  Settings → Speech are "OneCore" voices). If the diagnostic page shows no
-  Hebrew/Arabic voice in Chrome even after installing them, run the game in
-  **Microsoft Edge** instead.
-- Speech starts only after the first click on the page (clicking **Start Game**
-  counts), per browser autoplay rules
+- **Best fix:** generate the recorded clips — `node tools/generate-audio.mjs`
+  (needs internet once), then commit `public/audio/`. After that, audio works on
+  any browser/device with no installed voices. See [Read-aloud](#read-aloud).
+- If you instead rely on OS voices: this PC may simply have no Hebrew/Arabic
+  voice installed. Chrome on Windows also often can't see voices that **Edge**
+  can — try Edge, or just bundle the recordings above.
+- Diagnose with **`http://localhost:3000/speech-test.html`**: it plays a test
+  beep, tries English/Hebrew/Arabic, and lists every voice the browser sees.
+- Speech/audio starts only after the first click on the page (clicking **Start
+  Game** counts), per browser autoplay rules.
 
 ---
 
