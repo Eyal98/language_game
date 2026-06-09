@@ -316,13 +316,18 @@ taskkill /PID <PID> /F
 - The RF speed (2000 bps) must match between the two sketches
 
 **Can't hear the words**
+- Open the built-in diagnostic page: **`http://localhost:3000/speech-test.html`**.
+  It plays a test beep, tries English/Hebrew/Arabic speech, and lists every
+  voice the browser can see — it tells you exactly what's missing.
 - The most common cause: no Hebrew/Arabic **voice** is installed on the device —
   see [Read-aloud](#read-aloud) for the Windows install steps. The welcome
   screen shows a 🔇 hint when a voice is missing.
+- **Chrome on Windows often can't see voices that Edge can** (voices added via
+  Settings → Speech are "OneCore" voices). If the diagnostic page shows no
+  Hebrew/Arabic voice in Chrome even after installing them, run the game in
+  **Microsoft Edge** instead.
 - Speech starts only after the first click on the page (clicking **Start Game**
   counts), per browser autoplay rules
-- Check the device/browser tab isn't muted, and press F12 → Console: the game
-  logs which voices it found and which languages are missing
 
 ---
 

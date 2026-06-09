@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Speech Test - Hebrew Word Game</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #2C3E50; }
+    h1 { font-size: 1.6rem; }
+    .row { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 1rem 0; }
+    button { font-size: 1.1rem; padding: 0.6rem 1.2rem; border: none; border-radius: 10px; cursor: pointer; background: #4ECDC4; color: white; }
+    button:hover { opacity: 0.9; }
+    .status { padding: 0.8rem 1rem; border-radius: 10px; margin: 0.5rem 0; font-weight: 600; }
+    .ok   { background: #e8f8f0; color: #1e7e4f; }
+    .bad  { background: #fdecea; color: #b3261e; }
+    .warn { background: #fff8e1; color: #8a6d1a; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; font-size: 0.95rem; }
+    th, td { text-align: left; padding: 0.35rem 0.6rem; border-bottom: 1px solid #eee; }
+    .hl { background: #e8f8f0; }
+    .muted { color: #999; }
+    a { color: #3BA99E; }
+  </style>
+</head>
+<body>
+  <a href="/">&larr; Back to Game</a>
+  <h1>🔊 Speech Test</h1>
+  <p>This page checks whether this browser can read the game words aloud.
+     Click the buttons — each click also satisfies the browser's
+     "user interaction" rule for audio.</p>
+
+  <div class="row">
+    <button onclick="testBeep()">1. Beep (audio output)</button>
+    <button onclick="testSpeak('Hello, this is a test', ['en'], 'en-US')">2. English</button>
+    <button onclick="testSpeak('כלב', ['he','iw'], 'he-IL')">3. Hebrew (כלב)</button>
+    <button onclick="testSpeak('كلب', ['ar'], 'ar-SA')">4. Arabic (كلب)</button>
+  </div>
+
+  <div id="results"></div>
+  <div id="voice-summary"></div>
+  <table id="voice-table"></table>
+
+  <script>
+    const results = document.getElementById('results');
+    const summary = document.getElementById('voice-summary');
+    const table = document.getElementById('voice-table');
+
+    function log(cls, msg) {
+      const div = document.createElement('div');
+      div.className = 'status ' + cls;
+      div.textContent = msg;
+      results.prepend(div);
+    }
+
+    // 1. Plain WebAudio beep — separates "device/tab muted" from "no voice".
+    function testBeep() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        ctx.resume();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.frequency.value = 660;
+        gain.gain.value = 0.3;
+        osc.connect(gain).connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.4);
+        log('warn', 'Beep played. Heard it? Audio output works — any remaining problem is voices. Didn’t hear it? The device/tab is muted.');
+      } catch (e) {
+        log('bad', 'Could not play a beep: ' + e.message);
+      }
+    }
+
+    // 2-4. Speech tests with detailed outcome reporting.
+    function testSpeak(text, prefixes, fallbackLang) {
+      if (!('speechSynthesis' in window)) {
+        log('bad', 'This browser has no speechSynthesis support at all.');
+        return;
+      }
+      const synth = window.speechSynthesis;
+      const voices = synth.getVoices();
+      const voice = voices.find(v => v.lang && prefixes.some(p => v.lang.toLowerCase().startsWith(p))) || null;
+
+      const utter = new SpeechSynthesisUtterance(text);
+      if (voice) utter.voice = voice;
+      utter.lang = voice ? voice.lang : fallbackLang;
+      utter.rate = 0.85;
+
+      const label = fallbackLang + (voice ? ` via "${voice.name}"` : ' — NO matching voice installed');
+      utter.onstart = () => log(voice ? 'ok' : 'warn', `Speaking ${label}. If it's silent or wrong-sounding, the voice is missing or unsuitable.`);
+      utter.onend = () => {};
+      utter.onerror = (e) => log('bad', `Speech error for ${label}: ${e.error}`);
+
+      synth.cancel();
+      synth.resume();
+      // Chrome drops utterances queued immediately after cancel(); wait a beat.
+      setTimeout(() => synth.speak(utter), 150);
+
+      if (!voice) {
+        log('bad', `No ${fallbackLang} voice found. The browser will try its default voice, which usually cannot pronounce this language (or stays silent).`);
+      }
+    }
+
+    // Voice inventory table, refreshed when the (async) list loads.
+    function renderVoices() {
+      const voices = ('speechSynthesis' in window) ? speechSynthesis.getVoices() : [];
+      const hasHe = voices.some(v => /^he|^iw/i.test(v.lang));
+      const hasAr = voices.some(v => /^ar/i.test(v.lang));
+
+      summary.innerHTML = '';
+      const mk = (ok, txt) => {
+        const d = document.createElement('div');
+        d.className = 'status ' + (ok ? 'ok' : 'bad');
+        d.textContent = txt;
+        summary.appendChild(d);
+      };
+      if (!voices.length) {
+        mk(false, 'No voices loaded (yet). Click a button or wait a moment, then this list refreshes.');
+      } else {
+        mk(hasHe, hasHe ? '✓ Hebrew voice found' : '✗ No Hebrew voice — install it: Settings → Time & Language → Speech → Add voices → עברית. If installed but missing here, try Microsoft Edge: Chrome often cannot see voices that Edge can.');
+        mk(hasAr, hasAr ? '✓ Arabic voice found' : '✗ No Arabic voice — install it: Settings → Time & Language → Speech → Add voices → العربية. If installed but missing here, try Microsoft Edge: Chrome often cannot see voices that Edge can.');
+      }
+
+      table.innerHTML = '<tr><th>#</th><th>Voice</th><th>Language</th><th>Local</th></tr>' +
+        voices.map((v, i) =>
+          `<tr class="${/^he|^iw|^ar/i.test(v.lang) ? 'hl' : ''}">
+             <td class="muted">${i + 1}</td><td>${v.name}</td><td>${v.lang}</td>
+             <td>${v.localService ? 'offline' : 'online only'}</td>
+           </tr>`).join('') ||
+        '<tr><td class="muted" colspan="4">(no voices)</td></tr>';
+    }
+
+    if ('speechSynthesis' in window) {
+      renderVoices();
+      speechSynthesis.onvoiceschanged = renderVoices;
+    } else {
+      summary.innerHTML = '<div class="status bad">speechSynthesis is not supported in this browser.</div>';
+    }
+  </script>
+</body>
+</html>
