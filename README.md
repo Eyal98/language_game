@@ -60,10 +60,10 @@ The game includes 14 words across four categories. Add or edit them in
 
 | Category | Words |
 |----------|-------|
-| Animal | Dog, Cat, Fish, Bird, Horse |
-| Color | Red, Blue, Green, Yellow |
-| Food | Apple, Banana, Bread |
-| Nature | Flower, Sun |
+| Color | Red (אדום), Blue (כחול), Yellow (צהוב) |
+| Animal | Dog (כלב), Cat (חתול), Bird (ציפור), Fish (דג) |
+| Clothing | Shirt (חולצה), Shoes (נעליים), Pants (מכנסיים), Hat (כובע) |
+| Food | Apple (תפוח), Pear (אגס), Banana (בננה) |
 
 Each word is **bilingual**: it stores Hebrew and Arabic (both with and without
 vowel marks), transliterations, and an emoji. During a round the Hebrew word
