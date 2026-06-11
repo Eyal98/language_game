@@ -18,7 +18,7 @@ const els = {
   wordFeedback: document.getElementById('word-feedback'),
   wordReveal: document.getElementById('word-reveal'),
   revealEmoji: document.getElementById('reveal-emoji'),
-  revealEnglish: document.getElementById('reveal-english'),
+  revealWordEl: document.getElementById('reveal-word'),
   scoreValue1: document.getElementById('score-value-1'),
   scoreValue2: document.getElementById('score-value-2'),
   scorePlayer1: document.getElementById('score-player1'),
@@ -35,9 +35,12 @@ let showNikkud = true;
 let currentWord = null;
 let audioCtx;
 let timerWarningTimeout;
-let arabicRevealTimeout;        // delay before the Arabic word appears
-let speakDelayTimeout;          // small gap between cancel() and speak() (Chrome quirk)
-const ARABIC_DELAY_MS = 2000;   // show/speak Arabic this long after the Hebrew
+let arabicRevealTimeout;          // delay before the Arabic word appears
+let speakDelayTimeout;            // delay before the Hebrew word is read aloud
+// Timing per round (ms after the Hebrew word is shown). The spoken word is
+// held back so players get a moment to read first — the audio is an assist.
+const HEBREW_SPEAK_DELAY_MS = 2500;  // read the Hebrew word aloud (hint)
+const ARABIC_DELAY_MS = 4500;        // then show + read the Arabic word
 
 // ===== Sound Effects =====
 
@@ -138,11 +141,11 @@ function updateVoiceHint() {
     recIds.length === 0 && !( 'speechSynthesis' in window && pickVoice(prefixes));
 
   const missing = [];
-  if (cantSpeak(audioManifest.he, HEBREW_PREFIXES)) missing.push('Hebrew');
-  if (cantSpeak(audioManifest.ar, ARABIC_PREFIXES)) missing.push('Arabic');
+  if (cantSpeak(audioManifest.he, HEBREW_PREFIXES)) missing.push('עברית');
+  if (cantSpeak(audioManifest.ar, ARABIC_PREFIXES)) missing.push('ערבית');
 
   if (missing.length) {
-    els.voiceHint.textContent = `🔇 No ${missing.join(' or ')} audio on this device. Either install a ${missing.join('/')} voice, or bundle recordings (see README "Read-aloud").`;
+    els.voiceHint.textContent = `🔇 אין שמע ל${missing.join(' ו')} במכשיר הזה.`;
   } else {
     els.voiceHint.textContent = '';
   }
@@ -274,11 +277,11 @@ function updateWord(word, withSpeech = false) {
     els.wordDisplay.style.animation = 'wordAppear 0.5s ease';
   });
   if (withSpeech) {
-    // Stop any leftover audio from the previous round. Chrome silently drops a
-    // synthesis utterance queued immediately after cancel(), so speak after a beat.
+    // Stop any leftover audio from the previous round, then read the Hebrew word
+    // aloud after a short delay so it acts as a hint rather than giving it away.
     stopSpeech();
     clearTimeout(speakDelayTimeout);
-    speakDelayTimeout = setTimeout(() => speakHebrew(word), 150);
+    speakDelayTimeout = setTimeout(() => speakHebrew(word), HEBREW_SPEAK_DELAY_MS);
   }
 
   // If the Arabic is already visible (e.g. nikkud toggled mid-round), keep it in
@@ -321,7 +324,12 @@ function showFeedback(text, color) {
 function revealWord(word) {
   els.wordReveal.classList.remove('hidden');
   els.revealEmoji.textContent = word.emoji;
-  els.revealEnglish.textContent = word.english;
+  els.revealWordEl.textContent = showNikkud ? word.hebrewNikkud : word.hebrew;
+}
+
+// Hebrew display name for a player.
+function playerName(player) {
+  return player === 'player1' ? 'שחקן 1' : 'שחקן 2';
 }
 
 function hideReveal() {
@@ -420,8 +428,7 @@ function handleEvent(data) {
       break;
 
     case 'wrongAnswer': {
-      const name = data.player === 'player1' ? 'Player 1' : 'Player 2';
-      showFeedback(`${name} - Try again!`, 'var(--wrong)');
+      showFeedback(`${playerName(data.player)} - נסו שוב!`, 'var(--wrong)');
       shakeWord();
       playWrong();
       break;
@@ -429,8 +436,7 @@ function handleEvent(data) {
 
     case 'roundResult': {
       stopTimer();
-      const winnerName = data.winner === 'player1' ? 'Player 1' : 'Player 2';
-      showFeedback(`${winnerName} got it! ⭐`, 'var(--correct)');
+      showFeedback(`${playerName(data.winner)} צדק! ⭐`, 'var(--correct)');
       updateScores(data.scores);
       pulseScore(data.winner);
       highlightWinner(data.winner);
@@ -442,13 +448,13 @@ function handleEvent(data) {
 
     case 'roundTimeout':
       stopTimer();
-      showFeedback('Time\'s up! ⏰', '#E67E22');
+      showFeedback('נגמר הזמן! ⏰', '#E67E22');
       if (data.word) revealWord(data.word);
       break;
 
     case 'roundSkipped':
       stopTimer();
-      showFeedback('Skipped!', '#95A5A6');
+      showFeedback('דילגנו!', '#95A5A6');
       if (data.word) revealWord(data.word);
       break;
 
@@ -460,10 +466,9 @@ function handleEvent(data) {
         els.finalScore2.textContent = data.scores.player2;
 
         if (data.winner === 'tie') {
-          els.gameoverTitle.textContent = "It's a Tie! 🤝";
+          els.gameoverTitle.textContent = 'תיקו! 🤝';
         } else {
-          const name = data.winner === 'player1' ? 'Player 1' : 'Player 2';
-          els.gameoverTitle.textContent = `${name} Wins! 🎉`;
+          els.gameoverTitle.textContent = `${playerName(data.winner)} ניצח! 🎉`;
         }
         spawnConfetti();
       }, 800);

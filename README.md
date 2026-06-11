@@ -1,6 +1,6 @@
-# Hebrew Word Game 🎮
+# מירוץ המילים (Word Race) 🏁
 
-A two-player Hebrew vocabulary **race** game using RFID cards — on a single reader, no WiFi required. Each word has **two** matching cards: one belonging to Player 1, one to Player 2. The screen shows a Hebrew word and both players race to scan their own matching picture card. The card's UID tells the server who scanned, so the first correct scan wins the round. Most points after all rounds wins!
+A two-player Hebrew/Arabic vocabulary **race** game using RFID cards — on a single reader, no WiFi required. The interface is in Hebrew. Each word has **two** matching cards: one belonging to Player 1, one to Player 2. The screen shows a Hebrew word and both players race to scan their own matching picture card. The card's UID tells the server who scanned, so the first correct scan wins the round. Most points after all rounds wins!
 
 > **Earlier versions:** the two-reader racing version is preserved at the `two-scanners-v1` tag; a single-reader turn-based variant exists in git history.
 
@@ -72,8 +72,10 @@ accent — no engine offers a Levantine voice.
 
 Each word is **bilingual**: it stores Hebrew and Arabic (both with and without
 vowel marks), transliterations, and an emoji. During a round the Hebrew word
-shows first and is read aloud; about 2 seconds later the Arabic word appears
-below it and is read aloud too.
+shows first; **~2.5 s later it is read aloud** as a hint (the delay gives quick
+readers a chance to win first), and **~4.5 s in the Arabic word appears** below
+it and is read aloud too. These timings are `HEBREW_SPEAK_DELAY_MS` and
+`ARABIC_DELAY_MS` at the top of `public/game.js`.
 
 ### Read-aloud
 

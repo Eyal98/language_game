@@ -20,7 +20,8 @@
 
 body {
   font-family: 'Fredoka', 'Noto Sans Hebrew', sans-serif;
-  background: var(--bg-primary);
+  background: linear-gradient(160deg, #FFF7C4 0%, #FFE89A 50%, #FFD56B 100%);
+  background-attachment: fixed;
   color: var(--text-dark);
   min-height: 100vh;
   overflow: hidden;
@@ -47,20 +48,27 @@ body {
 .welcome-container {
   text-align: center;
   animation: fadeIn 0.6s ease;
+  background: rgba(255, 255, 255, 0.55);
+  padding: 3rem 4rem;
+  border-radius: 40px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(6px);
 }
 
 .welcome-title {
   font-family: 'Noto Sans Hebrew', sans-serif;
   font-size: 5rem;
   color: var(--text-dark);
-  text-shadow: 3px 3px 0 var(--bg-secondary);
-  margin-bottom: 0.2em;
+  text-shadow: 2px 3px 0 var(--bg-secondary), 4px 6px 12px rgba(0, 0, 0, 0.12);
+  margin-bottom: 0.15em;
   animation: bounce 1s ease infinite;
 }
 
 .welcome-subtitle {
-  font-size: 2rem;
-  color: #666;
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: var(--player1-dark);
+  letter-spacing: 0.15em;
   margin-bottom: 2rem;
 }
 
@@ -95,11 +103,11 @@ body {
 }
 
 .player1-bg {
-  background: var(--player1);
+  background: linear-gradient(145deg, var(--player1), var(--player1-dark));
 }
 
 .player2-bg {
-  background: var(--player2);
+  background: linear-gradient(145deg, var(--player2), var(--player2-dark));
 }
 
 .btn-start {
@@ -263,7 +271,7 @@ body {
   border-radius: 30px;
   color: white;
   min-width: 220px;
-  box-shadow: 0 6px 20px var(--shadow);
+  box-shadow: 0 10px 28px var(--shadow), inset 0 2px 0 rgba(255, 255, 255, 0.25);
   transition: transform 0.3s;
 }
 
@@ -290,6 +298,13 @@ body {
   align-items: center;
   justify-content: center;
   flex: 1;
+  max-width: 720px;
+  padding: 2.5rem 3rem;
+  margin: 0 1.5rem;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 40px;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.1), inset 0 2px 0 rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(6px);
 }
 
 .word-display {
@@ -343,10 +358,11 @@ body {
   animation: bounce 0.6s ease;
 }
 
-.reveal-english {
+.reveal-word {
+  font-family: 'Noto Sans Hebrew', sans-serif;
   font-size: 2.5rem;
   font-weight: 700;
-  color: var(--text-dark);
+  color: var(--player1-dark);
 }
 
 .timer-bar-container {
@@ -486,8 +502,10 @@ body {
 
 @media (max-width: 900px) {
   .welcome-title { font-size: 3rem; }
+  .welcome-container { padding: 2rem; }
   .word-display { font-size: 5rem; }
   .word-display-ar { font-size: 3.5rem; }
+  .word-display-container { padding: 1.5rem; margin: 0 0.6rem; }
   .player-score { min-width: 120px; padding: 1rem; }
   .score-value { font-size: 3.5rem; }
   .player-name { font-size: 1.2rem; }

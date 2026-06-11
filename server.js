@@ -154,7 +154,7 @@ function startGame() {
   const readyWords = wordsData.words.filter(isWordReady);
   const count = Math.min(readyWords.length, MAX_ROUNDS);
   if (count === 0) {
-    return { error: 'No words ready. In /admin, assign both a Player 1 and a Player 2 card to at least one word.' };
+    return { error: 'אין מילים מוכנות. בדף הניהול (/admin) יש לשייך לכל מילה כרטיס לשחקן 1 וכרטיס לשחקן 2.' };
   }
 
   // Cancel any pending timers from a previous game so they can't corrupt this fresh one.
