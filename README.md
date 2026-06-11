@@ -65,6 +65,11 @@ The game includes 14 words across four categories. Add or edit them in
 | Clothing | Shirt (חולצה), Shoes (נעליים), Pants (מכנסיים), Hat (כובע) |
 | Food | Apple (תפוח), Pear (אגס), Banana (בננה) |
 
+The Arabic uses everyday **Levantine/Palestinian** vocabulary as spoken in
+Israel (e.g. pear = إجاص, pants = بنطلون, hat = طاقية, shoes = كندرة, cat = بسة),
+not Modern Standard Arabic. Note: text-to-speech still reads these in an MSA
+accent — no engine offers a Levantine voice.
+
 Each word is **bilingual**: it stores Hebrew and Arabic (both with and without
 vowel marks), transliterations, and an emoji. During a round the Hebrew word
 shows first and is read aloud; about 2 seconds later the Arabic word appears
