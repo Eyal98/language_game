@@ -1,4 +1,34 @@
 {
-  "he": [],
-  "ar": []
+  "he": [
+    "apple",
+    "banana",
+    "bird",
+    "blue",
+    "cat",
+    "dog",
+    "fish",
+    "hat",
+    "pants",
+    "pear",
+    "red",
+    "shirt",
+    "shoes",
+    "yellow"
+  ],
+  "ar": [
+    "apple",
+    "banana",
+    "bird",
+    "blue",
+    "cat",
+    "dog",
+    "fish",
+    "hat",
+    "pants",
+    "pear",
+    "red",
+    "shirt",
+    "shoes",
+    "yellow"
+  ]
 }
