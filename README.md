@@ -215,12 +215,32 @@ GND    ───── GND  (RF receiver)
 Libraries: `MFRC522` by GithubCommunity (Uno only) and `RadioHead` by Mike
 McCauley (both boards). Notes:
 
-- Solder a **~17 cm wire antenna** to both RF modules — without it the range is
-  under a meter; with it, comfortably across a room.
+- **Antennas are required, not optional.** Solder a **17.3 cm straight wire**
+  (¼ wavelength at 433 MHz) to the antenna pad of *both* the transmitter and the
+  receiver. With no antenna these modules have almost no range and the receiver
+  decodes nothing at all.
 - The RF link includes a CRC (RadioHead), so corrupted packets are dropped, and
   each UID is sent twice with the receiver de-duplicating repeats.
 - Set `SERIAL_PORT` to the **Leonardo's** COM port (the Uno doesn't connect to
   the PC at all).
+
+#### Bring it up step by step
+
+Verify each stage on its own — most "it doesn't work" cases are the reader or a
+missing antenna, not the game:
+
+1. **Reader** — open the **Uno's** Serial Monitor at 115200. At boot it prints
+   `MFRC522 version: 0x..`. A value of `0x91`/`0x92` (or `0x12`) means the reader
+   works; `0x00` or `0xFF` means it isn't wired right (check SDA=10, RST=9, the
+   SPI pins, and that VCC is **3.3 V, not 5 V**). Then scan a card — you should
+   see `Card detected: …` then `Sent over RF: …`.
+2. **RF link** — with antennas soldered, set `RF_SELFTEST 1` in the Uno sketch
+   and `RX_DEBUG 1` in the Leonardo sketch, re-upload both, and open the
+   **Leonardo's** Serial Monitor. You should see `PING` packets arriving every
+   2 s. If the heartbeat says `packets received so far: 0`, the link isn't
+   working — check antennas, the receiver's 5 V power, and DATA on pin 11.
+   Set both flags back to `0` for normal play.
+3. **Game** — point `SERIAL_PORT` at the Leonardo and start the server.
 
 ### Connect the server to the reader
 
@@ -330,13 +350,17 @@ taskkill /PID <PID> /F
 - Each playable word needs **both** the Player 1 and Player 2 cards assigned
 - If no word is fully assigned, the welcome screen shows an error explaining why
 
-**Wireless (RF) scans don't arrive**
-- Set `SERIAL_PORT` to the **Leonardo's** COM port, not the Uno's
-- Both RF modules need a ~17 cm wire antenna for usable range
-- Power the Uno well (weak batteries shrink RF range); the transmitter runs on 5V
-- Open the Serial Monitor on the Uno (115200): it prints `Sent: <UID>` per scan —
-  if that works but nothing arrives, the issue is the RF link or receiver wiring
-- The RF speed (2000 bps) must match between the two sketches
+**Wireless (RF) scans don't arrive** — isolate the stage (see "Bring it up step
+by step" above):
+- **Uno says ready but cards don't scan:** check the `MFRC522 version: 0x..`
+  line in the Uno's Serial Monitor. `0x00`/`0xFF` = reader not wired right
+  (SDA=10, RST=9, SPI 11/12/13, **VCC = 3.3 V not 5 V**). It must print
+  `Card detected: …` before any RF is involved.
+- **Reader works but nothing reaches the Leonardo:** almost always **no antenna**
+  — solder a 17.3 cm wire to *both* modules. Then bench-test with `RF_SELFTEST 1`
+  (Uno) + `RX_DEBUG 1` (Leonardo) and watch for `PING` on the Leonardo.
+- Set `SERIAL_PORT` to the **Leonardo's** COM port, not the Uno's.
+- The RF speed (2000 bps) must match between the two sketches.
 
 **Can't hear the words**
 - **Best fix:** generate the recorded clips — `node tools/generate-audio.mjs`
