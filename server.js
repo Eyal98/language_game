@@ -186,26 +186,24 @@ function processScan(rawUid) {
 
   gameState.lastScannedUid = normalizedUid;
 
-  // Single shared reader, race mode: the scanned card identifies BOTH the
-  // picture and which player owns it. First correct card scanned wins.
-  const match = identifyCard(normalizedUid);
-  const player = match ? match.player : null;
-
+  // Not in a live round: surface the scan for the admin "last scan" flow.
   if (gameState.status !== 'playing' || gameState.roundLocked) {
+    const owner = identifyCard(normalizedUid);
+    const player = owner ? owner.player : null;
     broadcast({ event: 'cardScanned', uid: normalizedUid, player });
     return { status: 'ignored', player };
   }
 
-  // An unknown card (not assigned to any word) can't score, but still surfaces
-  // for the admin "last scan" registration flow.
-  if (!match) {
-    broadcast({ event: 'cardScanned', uid: normalizedUid, player: null });
-    return { status: 'unknown', player: null };
-  }
+  // Correctness is decided against the CURRENT word's own two cards FIRST. A
+  // card may be assigned to several words (limited card decks reuse the same
+  // physical card), so we must not let a match on some other word mark a
+  // genuinely-correct scan as wrong.
+  const w = gameState.currentWord;
+  let player = null;
+  if (normalizedUid === w.cardUidP1) player = 'player1';
+  else if (normalizedUid === w.cardUidP2) player = 'player2';
 
-  const isCorrect = match.word.id === gameState.currentWord.id;
-
-  if (isCorrect) {
+  if (player) {
     gameState.roundLocked = true;
     gameState.scores[player]++;
     gameState.status = 'roundEnd';
@@ -214,7 +212,7 @@ function processScan(rawUid) {
     broadcast({
       event: 'roundResult',
       winner: player,
-      word: gameState.currentWord,
+      word: w,
       scores: gameState.scores
     });
 
@@ -222,8 +220,14 @@ function processScan(rawUid) {
     return { status: 'correct', player };
   }
 
-  broadcast({ event: 'wrongAnswer', player });
-  return { status: 'wrong', player };
+  // Wrong card. Try to attribute it to a player from any word it belongs to;
+  // an unknown card just can't score.
+  const owner = identifyCard(normalizedUid);
+  if (!owner) {
+    return { status: 'unknown', player: null };
+  }
+  broadcast({ event: 'wrongAnswer', player: owner.player });
+  return { status: 'wrong', player: owner.player };
 }
 
 // `slot` selects which player's card to set: 1 -> cardUidP1, 2 -> cardUidP2.
