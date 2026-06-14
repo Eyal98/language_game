@@ -361,6 +361,13 @@ by step" above):
   (Uno) + `RX_DEBUG 1` (Leonardo) and watch for `PING` on the Leonardo.
 - Set `SERIAL_PORT` to the **Leonardo's** COM port, not the Uno's.
 - The RF speed (2000 bps) must match between the two sketches.
+- **Serial Monitor sees the UID but the game doesn't:** this is the native-USB
+  (Leonardo/Micro) DTR quirk — the bridge now raises DTR/RTS so it streams like
+  the IDE does. Make sure the Serial Monitor is **closed** when the server runs
+  (only one program can hold the port), and confirm the server console prints
+  `[serial] Serial reader connected on COMx` followed by `[serial] <uid> -> …`
+  on each scan. If it instead says `Serial reader disabled`, `SERIAL_PORT` isn't
+  set.
 
 **Can't hear the words**
 - **Best fix:** generate the recorded clips — `node tools/generate-audio.mjs`

@@ -19,11 +19,22 @@ try {
   $port = New-Object System.IO.Ports.SerialPort $portName, $baud, 'None', 8, 'One'
   $port.NewLine = "`n"
   $port.ReadTimeout = [System.IO.Ports.SerialPort]::InfiniteTimeout
+  # Assert DTR/RTS. Native-USB boards (Arduino Leonardo/Micro, ATmega32u4) only
+  # stream serial to a host that has raised DTR — without this the Arduino IDE
+  # Serial Monitor sees data but this bridge gets nothing. Harmless on Uno.
+  $port.DtrEnable = $true
+  $port.RtsEnable = $true
   $port.Open()
 } catch {
   [Console]::Error.WriteLine("Could not open $portName @ $baud : $($_.Exception.Message)")
   exit 1
 }
+
+# A Leonardo/Micro may briefly re-enumerate when the port opens; give it a moment.
+Start-Sleep -Milliseconds 300
+$port.DtrEnable = $true
+$port.RtsEnable = $true
+try { $port.DiscardInBuffer() } catch { }
 
 [Console]::Error.WriteLine("Serial reader connected on $portName @ $baud")
 
